@@ -41,6 +41,7 @@ app.use('/api/', globalLimiter);
 
 // 静态文件服务
 app.use(express.static(path.join(__dirname, 'public')));
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // ============================================================
 // 数据库初始化 —— 自动建表 + 默认数据
@@ -584,6 +585,12 @@ app.use('/api/bins', require('./routes/binRoutes'));
 
 // 库存管理路由
 app.use('/api/inventory', require('./routes/inventoryRoutes'));
+
+// 销售订单路由
+app.use('/api/orders', require('./routes/orderRoutes'));
+
+// 客户路由（基础，完整CRUD在第七阶段）
+app.use('/api/customers', require('./routes/customerRoutes'));
 
 // 健康检查
 app.get('/api/health', (req, res) => {

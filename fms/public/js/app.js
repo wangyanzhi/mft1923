@@ -166,7 +166,7 @@ const Router = {
       case 'inventory': renderInventory(container); break;
       case 'bins': renderBins(container); break;
       case 'stockin': renderStockInOrders(container); break;
-      case 'orders': renderPlaceholder(container, '销售订单', '此模块将在第六阶段实现', 'clipboard'); break;
+      case 'orders': renderOrders(container); break;
       case 'purchases': renderPlaceholder(container, '采购管理', '此模块将在第七阶段实现', 'truck'); break;
       case 'customers': renderPlaceholder(container, '客户管理', '此模块将在第七阶段实现', 'users'); break;
       case 'consultations': renderPlaceholder(container, '咨询跟进', '此模块将在第七阶段实现', 'messageCircle'); break;
@@ -279,6 +279,443 @@ async function loadDashboardStats() {
 // ============================================================
 // 占位页面
 // ============================================================
+// ============================================================
+// 销售订单页面
+// ============================================================
+let ordPage = 1, ordSearch = '', ordStatus = '', ordPayStatus = '';
+
+async function renderOrders(container) {
+  ordPage = 1; ordSearch = ''; ordStatus = ''; ordPayStatus = '';
+  await loadOrdList(container);
+}
+
+async function loadOrdList(container, page = 1, search = '', status = '', payStatus = '') {
+  ordPage = page; ordSearch = search; ordStatus = status; ordPayStatus = payStatus;
+  try {
+    const params = new URLSearchParams({ page, limit: 12, search, status, payment_status: payStatus });
+    const res = await API.get('/orders?' + params.toString());
+    const { list, pagination } = res.data;
+
+    const statusBadge = s => s === '待处理' ? 'badge-warning' : s === '处理中' ? 'badge-info' : s === '已完成' ? 'badge-success' : s === '已取消' ? 'badge-default' : 'badge-default';
+    const payBadge = p => p === '已付款' ? 'badge-success' : p === '部分付款' ? 'badge-warning' : 'badge-default';
+
+    let rows = '';
+    if (list.length === 0) {
+      rows = `<tr><td colspan="10"><div class="empty-state"><div class="empty-icon">${Icons.clipboard}</div><p>暂无订单</p></div></td></tr>`;
+    } else {
+      rows = list.map(o => `
+        <tr>
+          <td><strong>${escHtml(o.order_number)}</strong></td>
+          <td>${escHtml(o.customer_name||'-')}</td>
+          <td>¥${Number(o.total_amount).toFixed(2)}</td>
+          <td><span class="badge ${statusBadge(o.status)}">${o.status}</span></td>
+          <td><span class="badge ${payBadge(o.payment_status)}">${o.payment_status}</span></td>
+          <td>${escHtml(o.agent_name||'-')}</td>
+          <td>${o.item_count} 项</td>
+          <td>${o.sales_date ? new Date(o.sales_date).toLocaleDateString('zh-CN') : '-'}</td>
+          <td>
+            <button class="btn btn-sm btn-outline" onclick="viewOrder(${o.id})">查看</button>
+            ${o.status==='待处理' ? `<button class="btn btn-sm btn-outline" style="color:var(--color-danger);margin-left:4px" onclick="deleteOrderConfirm(${o.id},'${escHtml(o.order_number)}')">删除</button>` : ''}
+          </td>
+        </tr>`).join('');
+    }
+
+    container.innerHTML = `
+      <div class="card">
+        <div class="card-header"><span>销售订单</span><button class="btn btn-primary btn-sm" onclick="createOrder()">+ 创建订单</button></div>
+        <div class="toolbar">
+          <input type="text" id="ordSearch" placeholder="搜索单号/客户/业务员..." value="${escHtml(search)}" onkeydown="if(event.key==='Enter')loadOrdList(document.getElementById('contentArea'),1,this.value,ordStatus,ordPayStatus)">
+          <select id="ordStatusSel" onchange="loadOrdList(document.getElementById('contentArea'),1,ordSearch,this.value,ordPayStatus)">
+            <option value="">全部状态</option><option value="待处理" ${status==='待处理'?'selected':''}>待处理</option><option value="处理中" ${status==='处理中'?'selected':''}>处理中</option><option value="已完成" ${status==='已完成'?'selected':''}>已完成</option><option value="已取消" ${status==='已取消'?'selected':''}>已取消</option>
+          </select>
+          <select onchange="loadOrdList(document.getElementById('contentArea'),1,ordSearch,ordStatus,this.value)">
+            <option value="">全部付款</option><option value="未付款" ${payStatus==='未付款'?'selected':''}>未付款</option><option value="已付款" ${payStatus==='已付款'?'selected':''}>已付款</option><option value="部分付款" ${payStatus==='部分付款'?'selected':''}>部分付款</option>
+          </select>
+          <span class="spacer"></span>
+          <span style="font-size:13px;color:var(--color-text-secondary)">共 ${pagination.total} 单</span>
+        </div>
+        <div class="table-container"><table><thead><tr>
+          <th>订单号</th><th>客户</th><th>金额</th><th>状态</th><th>付款</th><th>业务员</th><th>明细</th><th>日期</th><th>操作</th>
+        </tr></thead><tbody>${rows}</tbody></table></div>
+        ${renderOrdPagination(pagination)}
+      </div>`;
+  } catch (err) {
+    container.innerHTML = `<div class="card"><div class="empty-state"><p>加载失败：${escHtml(err.message)}</p></div></div>`;
+  }
+}
+
+function renderOrdPagination(p) {
+  if (p.totalPages <= 1) return '';
+  let btns = '';
+  btns += `<button ${p.page===1?'disabled':''} onclick="loadOrdList(document.getElementById('contentArea'),${p.page-1},ordSearch,ordStatus,ordPayStatus)">上一页</button>`;
+  for (let i=1;i<=p.totalPages;i++) btns += `<button class="${i===p.page?'active':''}" onclick="loadOrdList(document.getElementById('contentArea'),${i},ordSearch,ordStatus,ordPayStatus)">${i}</button>`;
+  btns += `<button ${p.page===p.totalPages?'disabled':''} onclick="loadOrdList(document.getElementById('contentArea'),${p.page+1},ordSearch,ordStatus,ordPayStatus)">下一页</button>`;
+  return `<div class="pagination">${btns}<span class="page-info">第 ${p.page}/${p.totalPages} 页</span></div>`;
+}
+
+// --- 创建订单向导 ---
+async function createOrder() {
+  const [custRes] = await Promise.all([API.get('/customers?limit=200')]);
+  const customers = custRes.data.list || [];
+  const custOpts = '<option value="">请选择客户</option>' + customers.map(c => `<option value="${c.id}">${escHtml(c.name)}${c.company?' ('+escHtml(c.company)+')':''}</option>`).join('');
+
+  document.getElementById('modalBox').style.width = '900px';
+  Modal.open('创建销售订单', `
+    <style>
+      .of-section { background:#fff; border:1px solid #E2E8F0; border-radius:10px; padding:18px 20px; margin-bottom:14px }
+      .of-section-title { font-size:13px; font-weight:700; color:#0F172A; margin-bottom:14px; display:flex; align-items:center; gap:8px }
+      .of-section-title::before { content:''; width:4px; height:16px; background:#3B82F6; border-radius:2px }
+      .of-grid2 { display:grid; grid-template-columns:1fr 1fr; gap:14px }
+      .of-grid3 { display:grid; grid-template-columns:1fr 1fr 1fr; gap:14px }
+      .of-grid4 { display:grid; grid-template-columns:1fr 1fr 1fr 1fr; gap:14px }
+      .of-item-row { display:flex; gap:8px; align-items:center; padding:10px 12px; background:#F8FAFC; border-radius:8px; border:1px solid #E2E8F0; margin-bottom:6px }
+      .of-item-row input, .of-item-row select { height:38px; border:1.5px solid #CBD5E1; border-radius:6px; font-size:13px; font-family:inherit; background:#fff; outline:none; padding:0 8px }
+      .of-item-row input:focus, .of-item-row select:focus { border-color:#3B82F6; box-shadow:0 0 0 3px rgba(59,130,246,.1) }
+      .of-upload-zone { border:2px dashed #CBD5E1; border-radius:10px; padding:24px; text-align:center; cursor:pointer; transition:all .2s; background:#F8FAFC }
+      .of-upload-zone:hover { border-color:#3B82F6; background:#EFF6FF }
+      .of-upload-zone svg { width:28px; height:28px; color:#94A3B8; margin-bottom:8px }
+      .of-upload-zone .of-upload-text { font-size:13px; color:#475569 }
+      .of-upload-zone .of-upload-hint { font-size:11px; color:#94A3B8; margin-top:4px }
+      .of-file-list { margin-top:8px; font-size:12px }
+      .of-file-list .of-file-item { display:flex; align-items:center; gap:6px; padding:4px 8px; background:#F1F5F9; border-radius:4px; margin-bottom:3px }
+      .of-summary { font-size:14px; font-weight:500; color:#475569 }
+      .of-summary strong { color:#0F172A; font-size:20px }
+    </style>
+
+    <!-- 1. 基本信息 -->
+    <div class="of-section">
+      <div class="of-section-title">基本信息</div>
+      <div class="of-grid2">
+        <div class="form-group"><label style="font-size:12px;font-weight:600;color:#475569">客户 *</label><select id="ofCustomer" style="height:40px">${custOpts}</select></div>
+        <div class="form-group"><label style="font-size:12px;font-weight:600;color:#475569">销售日期</label><input type="date" id="ofDate" value="${new Date().toISOString().slice(0,10)}" style="height:40px"></div>
+      </div>
+      <div class="of-grid3" style="margin-top:14px">
+        <div class="form-group"><label style="font-size:12px;font-weight:600;color:#475569">业务员</label><input type="text" id="ofAgent" style="height:40px"></div>
+        <div class="form-group"><label style="font-size:12px;font-weight:600;color:#475569">联系电话</label><input type="text" id="ofPhone" style="height:40px"></div>
+        <div class="form-group"><label style="font-size:12px;font-weight:600;color:#475569">快递公司</label><input type="text" id="ofExpress" style="height:40px"></div>
+      </div>
+    </div>
+
+    <!-- 2. 产品明细 -->
+    <div class="of-section">
+      <div class="of-section-title">产品明细</div>
+      <div style="display:flex;gap:8px;margin-bottom:8px;padding:0 12px;font-size:11px;font-weight:600;color:#94A3B8;text-transform:uppercase;letter-spacing:.3px">
+        <div style="width:160px;flex-shrink:0">产品型号</div>
+        <div style="width:200px;flex-shrink:0">批次选择 <span style="color:#EF4444">*</span></div>
+        <div style="width:65px;flex-shrink:0">数量</div>
+        <div style="width:75px;flex-shrink:0">单价</div>
+        <div style="width:80px;flex-shrink:0;text-align:right">小计</div>
+        <div style="width:32px;flex-shrink:0"></div>
+      </div>
+      <div id="ofItems">
+        <div class="of-item of-item-row">
+          <select class="of-prod" onchange="onOfProdChange(this)" style="width:160px;flex-shrink:0"><option value="">选产品</option></select>
+          <select class="of-inv" style="width:200px;flex-shrink:0"><option value="">先选产品</option></select>
+          <input type="number" class="of-qty" step="0.1" min="0.1" value="1" oninput="updateOfTotal()" style="width:65px;flex-shrink:0;text-align:center">
+          <input type="number" class="of-price" step="0.01" value="0" oninput="updateOfTotal()" style="width:75px;flex-shrink:0;text-align:right" placeholder="0.00">
+          <span class="of-subtotal" style="width:80px;flex-shrink:0;font-size:14px;font-weight:600;text-align:right;color:#0F172A">¥0.00</span>
+          <button type="button" onclick="this.closest('.of-item').remove();updateOfTotal()" style="width:32px;flex-shrink:0;height:38px;background:none;border:none;color:#94A3B8;cursor:pointer;font-size:20px;padding:0;border-radius:6px;transition:all .15s;line-height:1" onmouseenter="this.style.background='#FEE2E2';this.style.color='#EF4444'" onmouseleave="this.style.background='none';this.style.color='#94A3B8'">&times;</button>
+        </div>
+      </div>
+      <button type="button" class="btn btn-sm btn-outline" onclick="addOfItem()" style="margin-top:10px;font-weight:500">+ 添加产品</button>
+      <div style="display:flex;justify-content:flex-end;align-items:center;margin-top:12px;padding-top:12px;border-top:1px solid #E2E8F0">
+        <span class="of-summary">合计金额：<strong id="ofTotal" style="color:#3B82F6">¥0.00</strong></span>
+      </div>
+    </div>
+
+    <!-- 3. 订单选项 -->
+    <div class="of-section">
+      <div class="of-section-title">订单选项</div>
+      <div class="of-grid3">
+        <div class="form-group"><label style="font-size:12px;font-weight:600;color:#475569">托盘类型</label><select id="ofTray" style="height:40px"><option value="无">无</option><option value="单层">单层</option><option value="双层">双层</option></select></div>
+        <div class="form-group"><label style="font-size:12px;font-weight:600;color:#475569">防水</label><select id="ofWater" style="height:40px"><option value="否">否</option><option value="是">是</option></select></div>
+        <div class="form-group"><label style="font-size:12px;font-weight:600;color:#475569">COC</label><select id="ofCoc" style="height:40px"><option value="否">否</option><option value="是">是</option></select></div>
+        <div class="form-group"><label style="font-size:12px;font-weight:600;color:#475569">送货单</label><select id="ofDel" style="height:40px"><option value="否">否</option><option value="是">是</option></select></div>
+        <div class="form-group"><label style="font-size:12px;font-weight:600;color:#475569">退货单</label><select id="ofRet" style="height:40px"><option value="否">否</option><option value="是">是</option></select></div>
+        <div class="form-group"><label style="font-size:12px;font-weight:600;color:#475569">验货</label><select id="ofInsp" style="height:40px"><option value="否">否</option><option value="是">是</option></select></div>
+      </div>
+    </div>
+
+    <!-- 4. 财务信息 -->
+    <div class="of-section">
+      <div class="of-section-title">财务信息</div>
+      <div class="of-grid3">
+        <div class="form-group"><label style="font-size:12px;font-weight:600;color:#475569">发票税率</label><select id="ofRate" style="height:40px"><option value="无">无</option><option value="1%">1%</option><option value="13%">13%</option></select></div>
+        <div class="form-group"><label style="font-size:12px;font-weight:600;color:#475569">付款条件</label><select id="ofTerms" style="height:40px"><option value="已付">已付</option><option value="月结30天">月结30天</option><option value="月结90天">月结90天</option><option value="手动">手动</option></select></div>
+        <div class="form-group"><label style="font-size:12px;font-weight:600;color:#475569">付款状态</label><select id="ofPayStatus" style="height:40px"><option value="未付款">未付款</option><option value="已付款">已付款</option><option value="部分付款">部分付款</option></select></div>
+      </div>
+      <div style="margin-top:14px">
+        <div class="form-group"><label style="font-size:12px;font-weight:600;color:#475569">付款方式</label><input type="text" id="ofPayMethod" placeholder="如：转账 / 现金 / 支票" style="height:40px;max-width:300px"></div>
+      </div>
+    </div>
+
+    <!-- 5. 附件上传 -->
+    <div class="of-section">
+      <div class="of-section-title">附件上传</div>
+      <div class="of-grid2">
+        <div>
+          <label style="font-size:12px;font-weight:600;color:#475569;margin-bottom:8px;display:block">合同 / 资质文件</label>
+          <div class="of-upload-zone" onclick="document.getElementById('ofDocFile').click()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><polyline points="9 15 12 18 15 15"/></svg>
+            <div class="of-upload-text">点击上传合同 / 资质</div>
+            <div class="of-upload-hint">支持 PDF、Word、Excel、图片 (≤10MB)</div>
+          </div>
+          <input type="file" id="ofDocFile" style="display:none" accept=".pdf,.doc,.docx,.xls,.xlsx,image/*" multiple onchange="ofAddFiles('doc', this)">
+          <div class="of-file-list" id="ofDocList"></div>
+        </div>
+        <div>
+          <label style="font-size:12px;font-weight:600;color:#475569;margin-bottom:8px;display:block">产品发货图片</label>
+          <div class="of-upload-zone" onclick="document.getElementById('ofShipFile').click()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+            <div class="of-upload-text">点击上传发货图片</div>
+            <div class="of-upload-hint">支持 JPG、PNG、WebP (≤10MB)</div>
+          </div>
+          <input type="file" id="ofShipFile" style="display:none" accept="image/*" multiple onchange="ofAddFiles('ship', this)">
+          <div class="of-file-list" id="ofShipList"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 6. 备注 -->
+    <div class="of-section">
+      <div class="of-section-title">备注</div>
+      <textarea id="ofNotes" rows="2" placeholder="订单备注（可选）" style="width:100%;border:1.5px solid #E2E8F0;border-radius:8px;padding:10px 14px;font-size:13px;font-family:inherit;outline:none;resize:vertical;min-height:60px"></textarea>
+    </div>
+  `, `
+    <button class="btn btn-outline" onclick="Modal.close();window._ofPendingFiles=null">取消</button>
+    <button class="btn btn-primary btn-lg" onclick="execCreateOrder()">提交订单</button>
+  `);
+
+  // 初始化待上传文件列表
+  window._ofPendingFiles = { doc: [], ship: [] };
+
+  // 异步加载产品列表
+  try {
+    const prodRes = await API.get('/products?limit=200&status=');
+    window._ofProds = prodRes.data.list;
+    const prodOpts = '<option value="">选产品</option>' + prodRes.data.list.map(p => `<option value="${p.id}">${escHtml(p.model)}</option>`).join('');
+    document.querySelectorAll('.of-prod').forEach(s => { s.innerHTML = prodOpts; });
+  } catch (_) {}
+}
+
+// 附件选择处理
+function ofAddFiles(type, input) {
+  const listEl = document.getElementById(type === 'doc' ? 'ofDocList' : 'ofShipList');
+  const files = Array.from(input.files);
+  if (!window._ofPendingFiles) window._ofPendingFiles = { doc: [], ship: [] };
+  window._ofPendingFiles[type].push(...files);
+
+  listEl.innerHTML = window._ofPendingFiles[type].map((f, i) => `
+    <div class="of-file-item">
+      <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escHtml(f.name)}</span>
+      <span style="color:#94A3B8;flex-shrink:0">${(f.size/1024).toFixed(1)}KB</span>
+      <button type="button" onclick="ofRemoveFile('${type}',${i})" style="background:none;border:none;color:#EF4444;cursor:pointer;font-size:14px;padding:2px 4px">&times;</button>
+    </div>`).join('');
+  input.value = '';
+}
+
+function ofRemoveFile(type, index) {
+  window._ofPendingFiles[type].splice(index, 1);
+  const listEl = document.getElementById(type === 'doc' ? 'ofDocList' : 'ofShipList');
+  listEl.innerHTML = window._ofPendingFiles[type].map((f, i) => `
+    <div class="of-file-item">
+      <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escHtml(f.name)}</span>
+      <span style="color:#94A3B8;flex-shrink:0">${(f.size/1024).toFixed(1)}KB</span>
+      <button type="button" onclick="ofRemoveFile('${type}',${i})" style="background:none;border:none;color:#EF4444;cursor:pointer;font-size:14px;padding:2px 4px">&times;</button>
+    </div>`).join('');
+}
+
+function addOfItem() {
+  const container = document.getElementById('ofItems');
+  const template = container.querySelector('.of-item').cloneNode(true);
+  const inputs = template.querySelectorAll('input');
+  inputs.forEach(i => {
+    if (i.classList.contains('of-qty')) i.value = '1';
+    else if (i.classList.contains('of-price')) i.value = '0';
+    else i.value = '';
+  });
+  template.querySelector('.of-subtotal').textContent = '¥0.00';
+  template.querySelector('.of-inv').innerHTML = '<option value="">先选产品</option>';
+  // Add event listeners for qty/price change
+  template.querySelector('.of-qty').oninput = updateOfTotal;
+  template.querySelector('.of-price').oninput = updateOfTotal;
+  container.appendChild(template);
+}
+
+let _invCache = {};
+async function onOfProdChange(sel) {
+  const prodId = sel.value;
+  const invSel = sel.closest('.of-item').querySelector('.of-inv');
+  if (!prodId) { invSel.innerHTML = '<option value="">先选产品</option>'; return; }
+
+  try {
+    if (!_invCache[prodId]) {
+      const res = await API.get('/inventory/batch-numbers/' + prodId);
+      _invCache[prodId] = res.data;
+    }
+    const invs = _invCache[prodId];
+    invSel.innerHTML = '<option value="">选批次</option>' + invs.map(i => `<option value="${i.id}" data-qty="${i.quantity}">${i.batch_number} (库存: ${i.quantity})</option>`).join('');
+  } catch (_) { invSel.innerHTML = '<option value="">加载失败</option>'; }
+}
+
+function updateOfTotal() {
+  let total = 0;
+  document.querySelectorAll('.of-item').forEach(el => {
+    const qty = parseFloat(el.querySelector('.of-qty').value) || 0;
+    const price = parseFloat(el.querySelector('.of-price').value) || 0;
+    const sub = qty * price;
+    el.querySelector('.of-subtotal').textContent = '¥' + sub.toFixed(2);
+    total += sub;
+  });
+  const totalEl = document.getElementById('ofTotal');
+  if (totalEl) totalEl.textContent = '¥' + total.toFixed(2);
+}
+
+async function execCreateOrder() {
+  try {
+    const items = [];
+    document.querySelectorAll('.of-item').forEach(el => {
+      const prodId = parseInt(el.querySelector('.of-prod').value);
+      const invId = parseInt(el.querySelector('.of-inv').value);
+      const qty = parseFloat(el.querySelector('.of-qty').value);
+      const price = parseFloat(el.querySelector('.of-price').value);
+      if (prodId && invId && qty >= 0.1) {
+        items.push({ product_id: prodId, inventory_id: invId, quantity: qty, unit_price: price });
+      }
+    });
+
+    if (items.length === 0) { Toast.warning('请至少添加一条产品明细'); return; }
+
+    const body = {
+      customer_id: parseInt(document.getElementById('ofCustomer').value),
+      sales_date: document.getElementById('ofDate').value,
+      agent_name: document.getElementById('ofAgent').value.trim(),
+      contact_phone: document.getElementById('ofPhone').value.trim(),
+      express_company: document.getElementById('ofExpress').value.trim(),
+      payment_method: document.getElementById('ofPayMethod').value.trim(),
+      payment_status: document.getElementById('ofPayStatus').value,
+      tray_type: document.getElementById('ofTray').value,
+      waterproof: document.getElementById('ofWater').value,
+      coc: document.getElementById('ofCoc').value,
+      delivery_note: document.getElementById('ofDel').value,
+      return_note: document.getElementById('ofRet').value,
+      inspection: document.getElementById('ofInsp').value,
+      invoice_rate: document.getElementById('ofRate').value,
+      payment_terms: document.getElementById('ofTerms').value,
+      notes: document.getElementById('ofNotes').value,
+      items,
+    };
+
+    if (!body.customer_id) { Toast.warning('请选择客户'); return; }
+
+    const res = await API.post('/orders', body);
+    const orderId = res.data.id;
+    Toast.success('订单创建成功');
+
+    // 上传附件
+    const pending = window._ofPendingFiles;
+    if (pending && (pending.doc.length > 0 || pending.ship.length > 0)) {
+      const token = Auth.getToken();
+      for (const f of pending.doc) {
+        const fd = new FormData(); fd.append('file', f); fd.append('file_type', '合同资质');
+        await fetch('/api/orders/' + orderId + '/files', { method: 'POST', headers: { 'Authorization': 'Bearer ' + token }, body: fd });
+      }
+      for (const f of pending.ship) {
+        const fd = new FormData(); fd.append('file', f); fd.append('file_type', '发货图片');
+        await fetch('/api/orders/' + orderId + '/files', { method: 'POST', headers: { 'Authorization': 'Bearer ' + token }, body: fd });
+      }
+    }
+
+    Modal.close();
+    loadOrdList(document.getElementById('contentArea'), ordPage, ordSearch, ordStatus, ordPayStatus);
+  } catch (err) { Toast.error(err.message); }
+}
+
+// --- 查看订单 ---
+async function viewOrder(id) {
+  const res = await API.get('/orders/' + id);
+  const o = res.data;
+  const itemsHtml = o.items.map(i => `
+    <tr><td>${escHtml(i.product_model)}</td><td>${i.batch_number||'-'}</td><td>${i.quantity}</td><td>¥${Number(i.unit_price).toFixed(2)}</td><td>¥${Number(i.subtotal).toFixed(2)}</td><td>${i.bin_number ? escHtml(i.bin_number)+(i.bin_location?'('+escHtml(i.bin_location)+')':'') : '-'}</td></tr>
+  `).join('');
+
+  const filesHtml = (o.files||[]).length > 0 ? o.files.map(f => `
+    <div style="display:flex;align-items:center;gap:8px;padding:4px 0;font-size:13px">
+      <span>${f.file_type==='合同资质'?'📄':'📷'}</span>
+      <a href="${f.file_path}" target="_blank" style="flex:1">${escHtml(f.file_name)}</a>
+      <span style="color:var(--color-text-muted)">${(f.file_size/1024).toFixed(1)}KB</span>
+    </div>`).join('') : '<p style="color:var(--color-text-muted);font-size:13px">暂无附件</p>';
+
+  const canTransition = { '待处理': ['处理中', '已取消'], '处理中': ['已完成', '已取消'] };
+  const btns = (canTransition[o.status] || []).map(s => {
+    const cls = s === '已取消' ? 'btn-danger' : 'btn-primary';
+    return `<button class="btn btn-sm ${cls}" onclick="changeOrderStatus(${o.id},'${s}')">→ ${s}</button>`;
+  }).join(' ');
+
+  Modal.open('订单详情 — ' + o.order_number, `
+    <p>客户：<strong>${escHtml(o.customer_name)}</strong> | 状态：<span class="badge">${o.status}</span> | 付款：<span class="badge">${o.payment_status}</span></p>
+    <p style="font-size:13px;color:var(--color-text-secondary)">业务员：${escHtml(o.agent_name||'-')} | 日期：${o.sales_date||'-'} | 合计：<strong>¥${Number(o.total_amount).toFixed(2)}</strong></p>
+    <div class="table-container" style="margin-top:12px"><table>
+      <thead><tr><th>产品</th><th>批号</th><th>数量</th><th>单价</th><th>小计</th><th>箱号</th></tr></thead>
+      <tbody>${itemsHtml}</tbody></table></div>
+    <div style="margin-top:12px"><strong>附件</strong>${filesHtml}</div>
+    ${o.notes ? `<p style="margin-top:8px;font-size:13px"><strong>备注：</strong>${escHtml(o.notes)}</p>` : ''}
+  `, `
+    ${btns}
+    <button class="btn btn-sm btn-outline" onclick="uploadOrderFile(${o.id})">上传文件</button>
+    <button class="btn btn-outline" onclick="Modal.close()">关闭</button>
+  `);
+}
+
+async function changeOrderStatus(id, newStatus) {
+  try {
+    await API.put('/orders/' + id + '/status', { status: newStatus });
+    Toast.success('状态已更新为：' + newStatus);
+    Modal.close();
+    loadOrdList(document.getElementById('contentArea'), ordPage, ordSearch, ordStatus, ordPayStatus);
+  } catch (err) { Toast.error(err.message); }
+}
+
+async function uploadOrderFile(orderId) {
+  Modal.open('上传订单文件 — ' + orderId, `
+    <form id="uploadForm" enctype="multipart/form-data">
+      <div class="form-group"><label>文件类型</label><select id="ufType"><option value="合同资质">合同资质（合同/证书等）</option><option value="发货图片">发货图片</option></select></div>
+      <div class="form-group"><label>选择文件</label><input type="file" id="ufFile" required></div>
+      <div class="form-group"><label>说明</label><input type="text" id="ufDesc" placeholder="文件说明（可选）"></div>
+    </form>
+  `, `
+    <button class="btn btn-outline" onclick="Modal.close()">取消</button>
+    <button class="btn btn-primary" onclick="execUploadFile(${orderId})">上传</button>
+  `);
+}
+
+async function execUploadFile(orderId) {
+  try {
+    const formData = new FormData();
+    formData.append('file', document.getElementById('ufFile').files[0]);
+    formData.append('file_type', document.getElementById('ufType').value);
+    formData.append('description', document.getElementById('ufDesc').value);
+    const token = Auth.getToken();
+    await fetch('/api/orders/' + orderId + '/files', { method: 'POST', headers: { 'Authorization': 'Bearer ' + token }, body: formData });
+    Toast.success('文件上传成功'); Modal.close();
+  } catch (err) { Toast.error('上传失败'); }
+}
+
+function deleteOrderConfirm(id, orderNumber) {
+  Modal.open('确认删除', `
+    <p>确定要删除订单 <strong>${escHtml(orderNumber)}</strong> 吗？</p>
+    <p style="color:var(--color-success);font-size:13px;margin-top:8px">删除后库存将自动恢复</p>
+  `, `
+    <button class="btn btn-outline" onclick="Modal.close()">取消</button>
+    <button class="btn btn-danger" onclick="deleteOrderExec(${id})">确认删除</button>
+  `);
+}
+
+async function deleteOrderExec(id) {
+  try { await API.delete('/orders/' + id); Toast.success('订单已删除，库存已恢复'); Modal.close(); loadOrdList(document.getElementById('contentArea'), ordPage, ordSearch, ordStatus, ordPayStatus); }
+  catch (err) { Toast.error(err.message); }
+}
+
 // ============================================================
 // 库存管理页面
 // ============================================================
