@@ -19,10 +19,17 @@ router.put('/:id/status', updateStatus);
 router.delete('/:id', deleteOrder);
 
 // 订单文件
-router.post('/:id/files', (req, res, next) => {
-  const uploader = req.body.file_type === '发货图片' ? uploadShipment : uploadDocument;
-  uploader.single('file')(req, res, (err) => {
+router.post('/:id/files/document', (req, res, next) => {
+  uploadDocument.single('file')(req, res, (err) => {
     if (err) return res.status(400).json({ code: 400, message: err.message });
+    req.uploadType = '合同资质';
+    next();
+  });
+}, uploadFile);
+router.post('/:id/files/shipment', (req, res, next) => {
+  uploadShipment.single('file')(req, res, (err) => {
+    if (err) return res.status(400).json({ code: 400, message: err.message });
+    req.uploadType = '发货图片';
     next();
   });
 }, uploadFile);

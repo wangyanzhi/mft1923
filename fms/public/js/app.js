@@ -167,9 +167,9 @@ const Router = {
       case 'bins': renderBins(container); break;
       case 'stockin': renderStockInOrders(container); break;
       case 'orders': renderOrders(container); break;
-      case 'purchases': renderPlaceholder(container, '采购管理', '此模块将在第七阶段实现', 'truck'); break;
-      case 'customers': renderPlaceholder(container, '客户管理', '此模块将在第七阶段实现', 'users'); break;
-      case 'consultations': renderPlaceholder(container, '咨询跟进', '此模块将在第七阶段实现', 'messageCircle'); break;
+      case 'purchases': renderPurchases(container); break;
+      case 'customers': renderCustomers(container); break;
+      case 'consultations': renderConsultations(container); break;
       case 'users': renderUsers(container); break;
       case 'roles': renderRoles(container); break;
       default: renderDashboard(container);
@@ -205,80 +205,277 @@ function renderSidebar() {
 // ============================================================
 async function renderDashboard(container) {
   const user = Auth.getUser();
-
   container.innerHTML = `
     <div class="stat-grid">
-      <div class="stat-card">
-        <div class="stat-icon blue">${Icons.package}</div>
-        <div class="stat-info">
-          <div class="stat-value" id="statProducts">-</div>
-          <div class="stat-label">产品总数</div>
-        </div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-icon red">${Icons.alert}</div>
-        <div class="stat-info">
-          <div class="stat-value" id="statAlerts">-</div>
-          <div class="stat-label">库存预警</div>
-        </div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-icon indigo">${Icons.clipboard}</div>
-        <div class="stat-info">
-          <div class="stat-value" id="statOrders">-</div>
-          <div class="stat-label">今日订单</div>
-        </div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-icon green">${Icons.dollar}</div>
-        <div class="stat-info">
-          <div class="stat-value" id="statSales">-</div>
-          <div class="stat-label">本月销售额 (元)</div>
-        </div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-icon amber">${Icons.users}</div>
-        <div class="stat-info">
-          <div class="stat-value" id="statCustomers">-</div>
-          <div class="stat-label">客户总数</div>
-        </div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-icon indigo">${Icons.messageCircle}</div>
-        <div class="stat-info">
-          <div class="stat-value" id="statConsultations">-</div>
-          <div class="stat-label">待处理咨询</div>
-        </div>
-      </div>
+      ${statCard('blue', Icons.package, 'statProducts', '产品总数', '...')}
+      ${statCard('red', Icons.alert, 'statAlerts', '库存预警', '...')}
+      ${statCard('indigo', Icons.clipboard, 'statOrders', '今日订单', '...')}
+      ${statCard('green', Icons.dollar, 'statSales', '本月销售额', '...')}
+      ${statCard('amber', Icons.users, 'statCustomers', '客户总数', '...')}
+      ${statCard('indigo', Icons.messageCircle, 'statConsultations', '待处理咨询', '...')}
     </div>
-
     <div class="card">
       <div class="card-header">系统概览</div>
       <div class="welcome-panel">
         <p>欢迎回来，<strong>${user.name}</strong>（${user.role}）</p>
-        <p style="margin-top:8px">系统各模块按阶段开发上线：</p>
-        <div class="phase-list" style="margin-top:6px">
-          <span style="color:var(--color-success)">&#10003;</span> 第一阶段：项目骨架 + 数据库
-          <span style="color:var(--color-success)">&#10003;</span> 第二阶段：认证系统 + 登录页 + 主框架（当前）
-          <span style="color:var(--color-text-muted)">&#9711;</span> 第三阶段：用户管理 + 产品管理
-          <span style="color:var(--color-text-muted)">&#9711;</span> 第四阶段：库存管理 + 箱号管理
-          <span style="color:var(--color-text-muted)">&#9711;</span> 后续阶段：订单、采购、客户...
-        </div>
+        <p style="margin-top:8px;font-size:13px;color:var(--color-text-muted)">数据每 30 秒自动刷新</p>
       </div>
-    </div>
-  `;
-
+    </div>`;
   loadDashboardStats();
+  // Auto-refresh
+  if (window._dashInterval) clearInterval(window._dashInterval);
+  window._dashInterval = setInterval(loadDashboardStats, 30000);
 }
+function statCard(iconCls, iconSvg, id, label, val) { return `<div class="stat-card"><div class="stat-icon ${iconCls}">${iconSvg}</div><div class="stat-info"><div class="stat-value" id="${id}">${val}</div><div class="stat-label">${label}</div></div></div>`; }
+
+const _f = (n) => { if (n == null) return '-'; return typeof n === 'number' ? (n % 1 === 0 ? n.toLocaleString() : n.toFixed(1)) : n; };
+const _y = (n) => n != null ? '¥' + Number(n).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',') : '-';
 
 async function loadDashboardStats() {
-  try { const d = await API.get('/products?limit=1'); document.getElementById('statProducts').textContent = '✓'; } catch (_) {}
-  try { const d = await API.get('/inventory/alerts'); document.getElementById('statAlerts').textContent = d.data?.length || 0; } catch (_) {}
+  const setText = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
+
+  // Products count
+  try { const r = await API.get('/products?limit=1'); setText('statProducts', _f(r.data.pagination.total)); } catch (_) { setText('statProducts', '-'); }
+  // Inventory alerts
+  try { const r = await API.get('/inventory/alerts'); setText('statAlerts', _f(r.data.length)); } catch (_) { setText('statAlerts', '-'); }
+  // Today orders
+  try { const r = await API.get('/orders/today-count'); setText('statOrders', _f(r.data.count)); } catch (_) { setText('statOrders', '-'); }
+  // Monthly sales
+  try { const now = new Date(); const r = await API.get(`/orders/stats/sales?year=${now.getFullYear()}&month=${now.getMonth()+1}`); setText('statSales', _y(r.data.total.total_amount)); } catch (_) { setText('statSales', '-'); }
+  // Customers count
+  try { const r = await API.get('/customers?limit=1'); setText('statCustomers', _f(r.data.pagination.total)); } catch (_) { setText('statCustomers', '-'); }
+  // Pending consultations
+  try { const r = await API.get('/consultations?status=待跟进&limit=1'); setText('statConsultations', _f(r.data.pagination.total)); } catch (_) { setText('statConsultations', '-'); }
 }
 
 // ============================================================
-// 占位页面
+// 客户管理页面
 // ============================================================
+let custPage = 1, custSearch = '';
+async function renderCustomers(container) { custPage = 1; custSearch = ''; await loadCustList(container); }
+async function loadCustList(container, page = 1, search = '') {
+  custPage = page; custSearch = search;
+  try {
+    const res = await API.get(`/customers?page=${page}&limit=15&search=${encodeURIComponent(search)}`);
+    const { list, pagination } = res.data;
+    let rows = list.length === 0 ? `<tr><td colspan="8"><div class="empty-state"><div class="empty-icon">${Icons.users}</div><p>暂无客户</p></div></td></tr>` :
+      list.map(c => `<tr>
+        <td>${c.id}</td><td><strong>${escHtml(c.name)}</strong></td><td>${escHtml(c.company||'-')}</td>
+        <td>${escHtml(c.contact_person||'-')}</td><td>${escHtml(c.phone||'-')}</td>
+        <td><span class="badge ${c.status==='启用'?'badge-success':'badge-default'}">${c.status}</span></td>
+        <td>
+          <button class="btn btn-sm btn-outline" onclick="editCustomer(${c.id})">编辑</button>
+          <button class="btn btn-sm btn-outline" style="color:var(--color-danger);margin-left:4px" onclick="deleteCustConfirm(${c.id},'${escHtml(c.name)}')">删除</button>
+        </td></tr>`).join('');
+    container.innerHTML = `<div class="card">
+      <div class="card-header"><span>客户管理</span><button class="btn btn-primary btn-sm" onclick="editCustomer(0)">+ 新增客户</button></div>
+      <div class="toolbar"><input type="text" id="custSearch" placeholder="搜索名称/公司/联系人..." value="${escHtml(search)}" onkeydown="if(event.key==='Enter')loadCustList(document.getElementById('contentArea'),1,this.value)"><button class="btn btn-outline btn-sm" onclick="loadCustList(document.getElementById('contentArea'),1,document.getElementById('custSearch').value)">搜索</button><span class="spacer"></span><span style="font-size:13px;color:var(--color-text-secondary)">共 ${pagination.total} 个</span></div>
+      <div class="table-container"><table><thead><tr><th>ID</th><th>名称</th><th>公司</th><th>联系人</th><th>电话</th><th>状态</th><th>操作</th></tr></thead><tbody>${rows}</tbody></table></div>
+      ${pagination.totalPages > 1 ? `<div class="pagination"><span class="page-info">第 ${page}/${pagination.totalPages} 页</span></div>` : ''}
+    </div>`;
+  } catch (err) { container.innerHTML = `<div class="card"><div class="empty-state"><p>加载失败：${escHtml(err.message)}</p></div></div>`; }
+}
+
+async function editCustomer(id) {
+  let c = { name: '', company: '', contact_person: '', phone: '', email: '', address: '', notes: '', status: '启用' };
+  if (id > 0) { const r = await API.get('/customers/' + id); c = r.data; }
+  Modal.open(id === 0 ? '新增客户' : '编辑客户 — ' + c.name, `
+    <form><div class="form-row">
+      <div class="form-group"><label>名称 *</label><input type="text" id="cfName" value="${escHtml(c.name)}" required></div>
+      <div class="form-group"><label>公司</label><input type="text" id="cfCompany" value="${escHtml(c.company||'')}"></div>
+    </div><div class="form-row">
+      <div class="form-group"><label>联系人</label><input type="text" id="cfPerson" value="${escHtml(c.contact_person||'')}"></div>
+      <div class="form-group"><label>电话</label><input type="text" id="cfPhone" value="${escHtml(c.phone||'')}"></div>
+    </div><div class="form-row">
+      <div class="form-group"><label>邮箱</label><input type="email" id="cfEmail" value="${escHtml(c.email||'')}"></div>
+      <div class="form-group"><label>地址</label><input type="text" id="cfAddr" value="${escHtml(c.address||'')}"></div>
+    </div><div class="form-group"><label>备注</label><textarea id="cfNotes" rows="2">${escHtml(c.notes||'')}</textarea></div>
+    ${id > 0 ? `<div class="form-group"><label>状态</label><select id="cfStatus"><option value="启用" ${c.status==='启用'?'selected':''}>启用</option><option value="停用" ${c.status==='停用'?'selected':''}>停用</option></select></div>` : ''}
+    </form>
+  `, `<button class="btn btn-outline" onclick="Modal.close()">取消</button><button class="btn btn-primary" onclick="saveCustomer(${id})">保存</button>`);
+}
+
+async function saveCustomer(id) {
+  try {
+    const body = { name: document.getElementById('cfName').value.trim(), company: document.getElementById('cfCompany').value.trim(), contact_person: document.getElementById('cfPerson').value.trim(), phone: document.getElementById('cfPhone').value.trim(), email: document.getElementById('cfEmail').value.trim(), address: document.getElementById('cfAddr').value.trim(), notes: document.getElementById('cfNotes').value.trim() };
+    if (!body.name) { Toast.warning('请输入客户名称'); return; }
+    if (id === 0) { await API.post('/customers', body); Toast.success('客户创建成功'); }
+    else { const st = document.getElementById('cfStatus'); if (st) body.status = st.value; await API.put('/customers/' + id, body); Toast.success('客户更新成功'); }
+    Modal.close(); loadCustList(document.getElementById('contentArea'), custPage, custSearch);
+  } catch (err) { Toast.error(err.message); }
+}
+function deleteCustConfirm(id, name) { Modal.open('确认删除', `<p>确定删除客户 <strong>${escHtml(name)}</strong>？</p>`, `<button class="btn btn-outline" onclick="Modal.close()">取消</button><button class="btn btn-danger" onclick="deleteCustExec(${id})">确认</button>`); }
+async function deleteCustExec(id) { try { await API.delete('/customers/' + id); Toast.success('已删除'); Modal.close(); loadCustList(document.getElementById('contentArea'), custPage, custSearch); } catch (err) { Toast.error(err.message); } }
+
+// ============================================================
+// 咨询跟进页面
+// ============================================================
+let consPage = 1, consStatus = '';
+async function renderConsultations(container) { consPage = 1; consStatus = ''; await loadConsList(container); }
+async function loadConsList(container, page = 1, status = '') {
+  consPage = page; consStatus = status;
+  try {
+    const params = new URLSearchParams({ page, limit: 15, status });
+    const res = await API.get('/consultations?' + params.toString());
+    const { list, pagination } = res.data;
+    const badge = s => s==='待跟进'?'badge-warning':s==='跟进中'?'badge-info':'badge-default';
+    let rows = list.length === 0 ? `<tr><td colspan="8"><div class="empty-state"><div class="empty-icon">${Icons.messageCircle}</div><p>暂无咨询记录</p></div></td></tr>` :
+      list.map(c => `<tr>
+        <td>${c.id}</td><td><strong>${escHtml(c.customer_name)}</strong></td><td>${escHtml(c.content).substring(0,60)}${c.content.length>60?'...':''}</td>
+        <td><span class="badge ${badge(c.status)}">${c.status}</span></td><td>${c.consultation_date||'-'}</td><td>${c.next_follow_up||'-'}</td>
+        <td>${escHtml(c.operator_name||'-')}</td>
+        <td>
+          <button class="btn btn-sm btn-outline" onclick="editConsultation(${c.id})">编辑</button>
+          <button class="btn btn-sm btn-outline" style="color:var(--color-danger);margin-left:4px" onclick="deleteConsConfirm(${c.id})">删除</button>
+        </td></tr>`).join('');
+    container.innerHTML = `<div class="card">
+      <div class="card-header"><span>咨询跟进</span><button class="btn btn-primary btn-sm" onclick="editConsultation(0)">+ 新增咨询</button></div>
+      <div class="toolbar"><select onchange="loadConsList(document.getElementById('contentArea'),1,this.value)"><option value="">全部状态</option><option value="待跟进" ${status==='待跟进'?'selected':''}>待跟进</option><option value="跟进中" ${status==='跟进中'?'selected':''}>跟进中</option><option value="已关闭" ${status==='已关闭'?'selected':''}>已关闭</option></select><span class="spacer"></span><span style="font-size:13px;color:var(--color-text-secondary)">共 ${pagination.total} 条</span></div>
+      <div class="table-container"><table><thead><tr><th>ID</th><th>客户</th><th>内容</th><th>状态</th><th>日期</th><th>下次跟进</th><th>跟进人</th><th>操作</th></tr></thead><tbody>${rows}</tbody></table></div>
+    </div>`;
+  } catch (err) { container.innerHTML = `<div class="card"><div class="empty-state"><p>加载失败：${escHtml(err.message)}</p></div></div>`; }
+}
+
+async function editConsultation(id) {
+  const [custRes] = await Promise.all([API.get('/customers?limit=200')]);
+  const custOpts = custRes.data.list.map(c => `<option value="${c.id}">${escHtml(c.name)}</option>`).join('');
+  let c = { customer_id: '', consultation_date: new Date().toISOString().slice(0,10), content: '', next_follow_up: '', status: '待跟进', notes: '' };
+  if (id > 0) { const r = await API.get('/consultations/' + id); c = r.data; }
+  Modal.open(id === 0 ? '新增咨询' : '编辑咨询', `
+    <form>
+      <div class="form-group"><label>客户 *</label><select id="cfCust">${custOpts}</select></div>
+      <div class="form-row">
+        <div class="form-group"><label>日期</label><input type="date" id="cfDate" value="${c.consultation_date}"></div>
+        <div class="form-group"><label>下次跟进</label><input type="date" id="cfNext" value="${c.next_follow_up||''}"></div>
+      </div>
+      <div class="form-group"><label>咨询内容 *</label><textarea id="cfContent" rows="3" required>${escHtml(c.content||'')}</textarea></div>
+      <div class="form-row">
+        <div class="form-group"><label>状态</label><select id="cfStatus">${['待跟进','跟进中','已关闭'].map(s=>`<option ${c.status===s?'selected':''}>${s}</option>`).join('')}</select></div>
+      </div>
+      <div class="form-group"><label>备注</label><textarea id="cfNotes" rows="2">${escHtml(c.notes||'')}</textarea></div>
+    </form>
+  `, `<button class="btn btn-outline" onclick="Modal.close()">取消</button><button class="btn btn-primary" onclick="saveConsultation(${id})">保存</button>`);
+  if (id > 0) document.getElementById('cfCust').value = c.customer_id;
+}
+
+async function saveConsultation(id) {
+  try {
+    const body = { customer_id: parseInt(document.getElementById('cfCust').value), consultation_date: document.getElementById('cfDate').value, content: document.getElementById('cfContent').value.trim(), next_follow_up: document.getElementById('cfNext').value, status: document.getElementById('cfStatus').value, notes: document.getElementById('cfNotes').value.trim() };
+    if (!body.customer_id || !body.content) { Toast.warning('客户和咨询内容为必填'); return; }
+    if (id === 0) { await API.post('/consultations', body); Toast.success('咨询创建成功'); }
+    else { await API.put('/consultations/' + id, body); Toast.success('咨询更新成功'); }
+    Modal.close(); loadConsList(document.getElementById('contentArea'), consPage, consStatus);
+  } catch (err) { Toast.error(err.message); }
+}
+function deleteConsConfirm(id) { Modal.open('确认删除','<p>确定删除该咨询记录？</p>',`<button class="btn btn-outline" onclick="Modal.close()">取消</button><button class="btn btn-danger" onclick="deleteConsExec(${id})">确认</button>`); }
+async function deleteConsExec(id) { try { await API.delete('/consultations/' + id); Toast.success('已删除'); Modal.close(); loadConsList(document.getElementById('contentArea'), consPage, consStatus); } catch (err) { Toast.error(err.message); } }
+
+// ============================================================
+// 采购管理页面
+// ============================================================
+let purPage = 1;
+async function renderPurchases(container) { purPage = 1; await loadPurList(container); }
+async function loadPurList(container, page = 1) {
+  purPage = page;
+  try {
+    const [purRes, supRes] = await Promise.all([API.get('/purchase?page=' + page), API.get('/purchase/suppliers/list')]);
+    const { list, pagination } = purRes.data;
+    const suppliers = supRes.data;
+    const badge = s => s==='待处理'?'badge-warning':s==='已下单'?'badge-info':s==='已收货'?'badge-success':'badge-default';
+    let rows = list.length === 0 ? `<tr><td colspan="8"><div class="empty-state"><div class="empty-icon">${Icons.truck}</div><p>暂无采购单</p></div></td></tr>` :
+      list.map(p => `<tr>
+        <td><strong>${escHtml(p.order_number)}</strong></td><td>${escHtml(p.supplier_name||'-')}</td><td>¥${Number(p.total_amount).toFixed(2)}</td>
+        <td><span class="badge ${badge(p.status)}">${p.status}</span></td><td>${p.item_count} 项</td><td>${p.order_date||'-'}</td>
+        <td>
+          <button class="btn btn-sm btn-outline" onclick="viewPurchase(${p.id})">查看</button>
+          ${p.status==='待处理'?`<button class="btn btn-sm btn-outline" style="color:var(--color-danger);margin-left:4px" onclick="deletePurConfirm(${p.id},'${escHtml(p.order_number)}')">删除</button>`:''}
+        </td></tr>`).join('');
+    let supRows = suppliers.map(s => `<tr><td>${s.id}</td><td>${escHtml(s.name)}</td><td>${escHtml(s.contact_person||'-')}</td><td>${escHtml(s.phone||'-')}</td><td><span class="badge ${s.status==='启用'?'badge-success':'badge-default'}">${s.status}</span></td><td><button class="btn btn-sm btn-outline" onclick="editSupplier(${s.id})">编辑</button><button class="btn btn-sm btn-outline" style="color:var(--color-danger);margin-left:4px" onclick="deleteSupConfirm(${s.id},'${escHtml(s.name)}')">删除</button></td></tr>`).join('');
+    container.innerHTML = `
+      <div class="card">
+        <div class="card-header"><span>采购单管理</span><button class="btn btn-primary btn-sm" onclick="createPurchase()">+ 创建采购单</button></div>
+        <div class="table-container"><table><thead><tr><th>单号</th><th>供应商</th><th>金额</th><th>状态</th><th>明细</th><th>日期</th><th>操作</th></tr></thead><tbody>${rows}</tbody></table></div>
+      </div>
+      <div class="card">
+        <div class="card-header"><span>供应商管理</span><button class="btn btn-primary btn-sm" onclick="editSupplier(0)">+ 新增供应商</button></div>
+        <div class="table-container"><table><thead><tr><th>ID</th><th>名称</th><th>联系人</th><th>电话</th><th>状态</th><th>操作</th></tr></thead><tbody>${supRows||'<tr><td colspan="6">暂无供应商</td></tr>'}</tbody></table></div>
+      </div>`;
+  } catch (err) { container.innerHTML = `<div class="card"><div class="empty-state"><p>加载失败：${escHtml(err.message)}</p></div></div>`; }
+}
+
+async function createPurchase() {
+  const [prodRes, supRes] = await Promise.all([API.get('/products?limit=200&status='), API.get('/purchase/suppliers/list')]);
+  const supOpts = '<option value="">选供应商</option>' + supRes.data.filter(s => s.status === '启用').map(s => `<option value="${s.id}">${escHtml(s.name)}</option>`).join('');
+  const prodOpts = prodRes.data.list.map(p => `<option value="${p.id}">${escHtml(p.model)}</option>`).join('');
+  document.getElementById('modalBox').style.width = '700px';
+  Modal.open('创建采购单', `
+    <div class="form-row"><div class="form-group"><label>供应商 *</label><select id="pfSup">${supOpts}</select></div><div class="form-group"><label>预计到货</label><input type="date" id="pfExpected"></div></div>
+    <div class="form-group"><label>产品明细</label></div>
+    <div id="pfItems"><div class="pf-item" style="display:flex;gap:8px;align-items:center;padding:8px 10px;background:#F8FAFC;border-radius:8px;border:1px solid #E2E8F0;margin-bottom:6px">
+      <select class="pf-prod" style="flex:1;height:38px;border:1.5px solid #CBD5E1;border-radius:6px;font-size:13px;font-family:inherit;background:#fff;outline:none">${prodOpts}</select>
+      <input type="number" class="pf-qty" step="0.1" min="0.1" value="1" style="width:70px;height:38px;border:1.5px solid #CBD5E1;border-radius:6px;font-size:13px;font-family:inherit;text-align:center;outline:none">
+      <input type="number" class="pf-price" step="0.01" value="0" style="width:80px;height:38px;border:1.5px solid #CBD5E1;border-radius:6px;font-size:13px;font-family:inherit;text-align:right;outline:none">
+      <button type="button" onclick="this.closest('.pf-item').remove()" style="width:30px;height:38px;background:none;border:none;color:#94A3B8;cursor:pointer;font-size:20px;padding:0">&times;</button>
+    </div></div>
+    <button type="button" class="btn btn-sm btn-outline" onclick="addPfItem()" style="margin-top:8px">+ 添加产品</button>
+    <div class="form-group" style="margin-top:12px"><label>备注</label><textarea id="pfNotes" rows="2"></textarea></div>
+  `, `<button class="btn btn-outline" onclick="Modal.close()">取消</button><button class="btn btn-primary" onclick="execCreatePurchase()">提交</button>`);
+}
+
+function addPfItem() { const c = document.getElementById('pfItems'); const t = c.querySelector('.pf-item').cloneNode(true); t.querySelectorAll('input').forEach(i => i.value = i.classList.contains('pf-qty') ? '1' : '0'); c.appendChild(t); }
+
+async function execCreatePurchase() {
+  try {
+    const items = []; document.querySelectorAll('.pf-item').forEach(el => { const pid = parseInt(el.querySelector('.pf-prod').value), qty = parseFloat(el.querySelector('.pf-qty').value), price = parseFloat(el.querySelector('.pf-price').value); if (pid && qty >= 0.1) items.push({ product_id: pid, quantity: qty, unit_price: price }); });
+    if (items.length === 0) { Toast.warning('请添加产品明细'); return; }
+    const body = { supplier_id: parseInt(document.getElementById('pfSup').value), order_date: new Date().toISOString().slice(0,10), expected_date: document.getElementById('pfExpected').value, notes: document.getElementById('pfNotes').value, items };
+    if (!body.supplier_id) { Toast.warning('请选择供应商'); return; }
+    await API.post('/purchase', body); Toast.success('采购单创建成功'); Modal.close(); loadPurList(document.getElementById('contentArea'), purPage);
+  } catch (err) { Toast.error(err.message); }
+}
+
+async function viewPurchase(id) {
+  const r = await API.get('/purchase/' + id); const p = r.data;
+  const itemsHtml = p.items.map(i => `<tr><td>${escHtml(i.product_model)}</td><td>${i.quantity}</td><td>¥${Number(i.unit_price).toFixed(2)}</td><td>¥${Number(i.subtotal).toFixed(2)}</td></tr>`).join('');
+  const canTrans = { '待处理': ['已下单','已取消'], '已下单': ['已收货','已取消'] };
+  const btns = (canTrans[p.status] || []).map(s => `<button class="btn btn-sm ${s==='已取消'?'btn-danger':'btn-primary'}" onclick="changePurStatus(${p.id},'${s}')">→ ${s}</button>`).join(' ');
+  Modal.open('采购单 — ' + p.order_number, `
+    <p>供应商：<strong>${escHtml(p.supplier_name)}</strong> | 状态：<span class="badge">${p.status}</span> | 合计：<strong>¥${Number(p.total_amount).toFixed(2)}</strong></p>
+    <p style="font-size:13px;color:var(--color-text-secondary)">日期：${p.order_date||'-'} | 预计到货：${p.expected_date||'-'} | 备注：${escHtml(p.notes||'')}</p>
+    <div class="table-container" style="margin-top:12px"><table><thead><tr><th>产品</th><th>数量</th><th>单价</th><th>小计</th></tr></thead><tbody>${itemsHtml}</tbody></table></div>
+  `, `${btns}<button class="btn btn-outline" onclick="Modal.close()">关闭</button>`);
+}
+
+async function changePurStatus(id, s) { try { await API.put('/purchase/' + id + '/status', { status: s }); Toast.success('状态已更新'); Modal.close(); loadPurList(document.getElementById('contentArea'), purPage); } catch (err) { Toast.error(err.message); } }
+function deletePurConfirm(id, on) { Modal.open('确认删除', `<p>删除采购单 <strong>${escHtml(on)}</strong>？</p>`, `<button class="btn btn-outline" onclick="Modal.close()">取消</button><button class="btn btn-danger" onclick="deletePurExec(${id})">确认</button>`); }
+async function deletePurExec(id) { try { await API.delete('/purchase/' + id); Toast.success('已删除'); Modal.close(); loadPurList(document.getElementById('contentArea'), purPage); } catch (err) { Toast.error(err.message); } }
+
+async function editSupplier(id) {
+  let s = { name: '', contact_person: '', phone: '', email: '', address: '', notes: '', status: '启用' };
+  if (id > 0) { const [rows] = await (await API.get('/purchase/suppliers/list')).data.filter(r => r.id === id); if (rows) s = rows; else { const r2 = await API.get('/purchase/suppliers/list'); s = r2.data.find(r => r.id === id) || s; } }
+  Modal.open(id === 0 ? '新增供应商' : '编辑供应商', `
+    <form><div class="form-row"><div class="form-group"><label>名称 *</label><input type="text" id="sfName" value="${escHtml(s.name)}" required></div><div class="form-group"><label>联系人</label><input type="text" id="sfPerson" value="${escHtml(s.contact_person||'')}"></div></div>
+    <div class="form-row"><div class="form-group"><label>电话</label><input type="text" id="sfPhone" value="${escHtml(s.phone||'')}"></div><div class="form-group"><label>邮箱</label><input type="email" id="sfEmail" value="${escHtml(s.email||'')}"></div></div>
+    <div class="form-group"><label>地址</label><input type="text" id="sfAddr" value="${escHtml(s.address||'')}"></div>
+    <div class="form-group"><label>备注</label><textarea id="sfNotes" rows="2">${escHtml(s.notes||'')}</textarea></div>
+    ${id>0?`<div class="form-group"><label>状态</label><select id="sfStatus"><option value="启用" ${s.status==='启用'?'selected':''}>启用</option><option value="停用" ${s.status==='停用'?'selected':''}>停用</option></select></div>`:''}
+    </form>
+  `, `<button class="btn btn-outline" onclick="Modal.close()">取消</button><button class="btn btn-primary" onclick="saveSupplier(${id})">保存</button>`);
+}
+
+async function saveSupplier(id) {
+  try {
+    const body = { name: document.getElementById('sfName').value.trim(), contact_person: document.getElementById('sfPerson').value.trim(), phone: document.getElementById('sfPhone').value.trim(), email: document.getElementById('sfEmail').value.trim(), address: document.getElementById('sfAddr').value.trim(), notes: document.getElementById('sfNotes').value.trim() };
+    if (!body.name) { Toast.warning('请输入供应商名称'); return; }
+    if (id > 0) { const st = document.getElementById('sfStatus'); if (st) body.status = st.value; }
+    if (id === 0) { await API.post('/purchase/suppliers', body); Toast.success('供应商创建成功'); }
+    else { await API.put('/purchase/suppliers/' + id, body); Toast.success('供应商更新成功'); }
+    Modal.close(); loadPurList(document.getElementById('contentArea'), purPage);
+  } catch (err) { Toast.error(err.message); }
+}
+function deleteSupConfirm(id, name) { Modal.open('确认删除', `<p>删除供应商 <strong>${escHtml(name)}</strong>？</p>`, `<button class="btn btn-outline" onclick="Modal.close()">取消</button><button class="btn btn-danger" onclick="deleteSupExec(${id})">确认</button>`); }
+async function deleteSupExec(id) { try { await API.delete('/purchase/suppliers/' + id); Toast.success('已删除'); Modal.close(); loadPurList(document.getElementById('contentArea'), purPage); } catch (err) { Toast.error(err.message); } }
+
 // ============================================================
 // 销售订单页面
 // ============================================================
@@ -315,6 +512,7 @@ async function loadOrdList(container, page = 1, search = '', status = '', paySta
           <td>${o.sales_date ? new Date(o.sales_date).toLocaleDateString('zh-CN') : '-'}</td>
           <td>
             <button class="btn btn-sm btn-outline" onclick="viewOrder(${o.id})">查看</button>
+            <button class="btn btn-sm btn-outline" onclick="editOrder(${o.id})" style="margin-left:4px">编辑</button>
             ${o.status==='待处理' ? `<button class="btn btn-sm btn-outline" style="color:var(--color-danger);margin-left:4px" onclick="deleteOrderConfirm(${o.id},'${escHtml(o.order_number)}')">删除</button>` : ''}
           </td>
         </tr>`).join('');
@@ -357,133 +555,271 @@ function renderOrdPagination(p) {
 async function createOrder() {
   const [custRes] = await Promise.all([API.get('/customers?limit=200')]);
   const customers = custRes.data.list || [];
-  const custOpts = '<option value="">请选择客户</option>' + customers.map(c => `<option value="${c.id}">${escHtml(c.name)}${c.company?' ('+escHtml(c.company)+')':''}</option>`).join('');
+  const custOpts = '<option value="">请选择</option>' + customers.map(c => `<option value="${c.id}">${escHtml(c.name)}${c.company?' ('+escHtml(c.company)+')':''}</option>`).join('');
 
-  document.getElementById('modalBox').style.width = '900px';
-  Modal.open('创建销售订单', `
+  document.getElementById('modalBox').style.width = '860px';
+  Modal.open('', `
     <style>
-      .of-section { background:#fff; border:1px solid #E2E8F0; border-radius:10px; padding:18px 20px; margin-bottom:14px }
-      .of-section-title { font-size:13px; font-weight:700; color:#0F172A; margin-bottom:14px; display:flex; align-items:center; gap:8px }
-      .of-section-title::before { content:''; width:4px; height:16px; background:#3B82F6; border-radius:2px }
-      .of-grid2 { display:grid; grid-template-columns:1fr 1fr; gap:14px }
-      .of-grid3 { display:grid; grid-template-columns:1fr 1fr 1fr; gap:14px }
-      .of-grid4 { display:grid; grid-template-columns:1fr 1fr 1fr 1fr; gap:14px }
-      .of-item-row { display:flex; gap:8px; align-items:center; padding:10px 12px; background:#F8FAFC; border-radius:8px; border:1px solid #E2E8F0; margin-bottom:6px }
-      .of-item-row input, .of-item-row select { height:38px; border:1.5px solid #CBD5E1; border-radius:6px; font-size:13px; font-family:inherit; background:#fff; outline:none; padding:0 8px }
-      .of-item-row input:focus, .of-item-row select:focus { border-color:#3B82F6; box-shadow:0 0 0 3px rgba(59,130,246,.1) }
-      .of-upload-zone { border:2px dashed #CBD5E1; border-radius:10px; padding:24px; text-align:center; cursor:pointer; transition:all .2s; background:#F8FAFC }
-      .of-upload-zone:hover { border-color:#3B82F6; background:#EFF6FF }
-      .of-upload-zone svg { width:28px; height:28px; color:#94A3B8; margin-bottom:8px }
-      .of-upload-zone .of-upload-text { font-size:13px; color:#475569 }
-      .of-upload-zone .of-upload-hint { font-size:11px; color:#94A3B8; margin-top:4px }
-      .of-file-list { margin-top:8px; font-size:12px }
-      .of-file-list .of-file-item { display:flex; align-items:center; gap:6px; padding:4px 8px; background:#F1F5F9; border-radius:4px; margin-bottom:3px }
-      .of-summary { font-size:14px; font-weight:500; color:#475569 }
-      .of-summary strong { color:#0F172A; font-size:20px }
+      .so-container { padding: 16px 0; }
+      .so-title { text-align:center; font-size:20px; font-weight:700; color:#1E293B; margin-bottom:16px; padding-bottom:12px; border-bottom:2px solid #3B82F6 }
+      
+      .so-row { display:flex; gap:16px; margin-bottom:10px }
+      .so-col { flex:1 }
+      .so-col-2 { flex:2 }
+      .so-col-3 { flex:3 }
+      .so-col-4 { flex:4 }
+      
+      .so-label { display:block; font-size:12px; font-weight:600; color:#475569; margin-bottom:4px; padding-left:2px }
+      .so-label.required::after { content:' *'; color:#EF4444 }
+      
+      .so-input, .so-select { width:100%; height:36px; border:1.5px solid #E2E8F0; border-radius:6px; padding:0 10px; font-size:13px; font-family:inherit; background:#fff; outline:none; transition:all .2s }
+      .so-input:focus, .so-select:focus { border-color:#3B82F6; box-shadow:0 0 0 2px rgba(59,130,246,.12) }
+      .so-input::placeholder { color:#94A3B8 }
+      
+      /* 开关样式 */
+      .so-switch-group { display:flex; align-items:center; gap:10px }
+      .so-switch { position:relative; width:40px; height:22px; cursor:pointer }
+      .so-switch input { opacity:0; width:0; height:0 }
+      .so-switch-track { position:absolute; top:0; left:0; right:0; bottom:0; background:#CBD5E1; border-radius:11px; transition:all .3s }
+      .so-switch-track::before { position:absolute; content:''; height:16px; width:16px; left:3px; bottom:3px; background:#fff; border-radius:50%; transition:all .3s; box-shadow:0 1px 3px rgba(0,0,0,.1) }
+      .so-switch input:checked + .so-switch-track { background:#10B981 }
+      .so-switch input:checked + .so-switch-track::before { transform:translateX(18px) }
+      .so-switch-label { font-size:12px; color:#64748B }
+      
+      /* 单选按钮组 */
+      .so-radio-group { display:flex; align-items:center; gap:12px }
+      .so-radio { display:flex; align-items:center; gap:4px; cursor:pointer }
+      .so-radio input { width:16px; height:16px; accent-color:#3B82F6 }
+      .so-radio label { font-size:12px; color:#475569; cursor:pointer }
+      
+      /* 产品明细表格 */
+      .so-table-wrapper { margin-top:6px; border:1px solid #E2E8F0; border-radius:8px; overflow:hidden }
+      .so-table { width:100%; border-collapse:collapse }
+      .so-table th { background:#F8FAFC; padding:8px 10px; text-align:left; font-size:11px; font-weight:600; color:#64748B; text-transform:uppercase; letter-spacing:.5px }
+      .so-table td { padding:8px 10px; border-top:1px solid #E2E8F0; vertical-align:middle }
+      .so-table .item-row:hover { background:#F8FAFC }
+      
+      .so-item-input { width:100%; height:34px; border:1.5px solid #E2E8F0; border-radius:5px; padding:0 8px; font-size:12px; outline:none; transition:all .2s }
+      .so-item-input:focus { border-color:#3B82F6 }
+      .so-item-select { width:100%; height:34px; border:1.5px solid #E2E8F0; border-radius:5px; padding:0 8px; font-size:12px; outline:none; background:#fff }
+      .so-item-select:focus { border-color:#3B82F6 }
+      
+      .so-delete-btn { width:26px; height:26px; border:none; background:#F1F5F9; border-radius:5px; color:#94A3B8; cursor:pointer; font-size:14px; display:flex; align-items:center; justify-content:center; transition:all .2s }
+      .so-delete-btn:hover { background:#FEE2E2; color:#EF4444 }
+      
+      .so-add-btn { margin-top:8px; padding:6px 14px; background:#F8FAFC; border:1px solid #E2E8F0; border-radius:5px; font-size:12px; font-weight:500; color:#64748B; cursor:pointer; transition:all .2s }
+      .so-add-btn:hover { background:#EFF6FF; border-color:#3B82F6; color:#3B82F6 }
+      
+      /* 合计栏 */
+      .so-total-bar { display:flex; justify-content:flex-end; align-items:center; margin-top:8px; padding:10px; background:#F0FDF4; border-radius:6px; border:1px solid #BBF7D0 }
+      .so-total-label { font-size:13px; font-weight:500; color:#059669; margin-right:8px }
+      .so-total-value { font-size:20px; font-weight:700; color:#059669 }
+      
+      /* 上传区域 */
+      .so-upload-area { border:2px dashed #CBD5E1; border-radius:8px; padding:14px; text-align:center; cursor:pointer; transition:all .2s; background:#FAFBFC }
+      .so-upload-area:hover { border-color:#3B82F6; background:#EFF6FF }
+      .so-upload-area svg { width:26px; height:26px; color:#94A3B8; margin-bottom:6px }
+      .so-upload-text { font-size:12px; color:#475569; font-weight:500 }
+      .so-upload-hint { font-size:11px; color:#94A3B8; margin-top:3px }
+      
+      .so-file-list { margin-top:8px }
+      .so-file-item { display:flex; align-items:center; gap:6px; padding:6px 10px; background:#F1F5F9; border-radius:5px; margin-bottom:5px }
+      .so-file-name { flex:1; font-size:12px; color:#475569; overflow:hidden; text-overflow:ellipsis; white-space:nowrap }
+      .so-file-size { font-size:11px; color:#94A3B8 }
+      .so-file-remove { color:#EF4444; cursor:pointer; font-size:14px }
+      
+      /* 备注 */
+      .so-textarea { width:100%; min-height:60px; border:1.5px solid #E2E8F0; border-radius:6px; padding:10px 12px; font-size:13px; font-family:inherit; resize:vertical; outline:none; transition:all .2s }
+      .so-textarea:focus { border-color:#3B82F6; box-shadow:0 0 0 2px rgba(59,130,246,.12) }
+      .so-textarea::placeholder { color:#94A3B8 }
+      
+      /* 库存红色高亮 */
+      .stock-warning { color:#EF4444; font-weight:700 }
     </style>
 
-    <!-- 1. 基本信息 -->
-    <div class="of-section">
-      <div class="of-section-title">基本信息</div>
-      <div class="of-grid2">
-        <div class="form-group"><label style="font-size:12px;font-weight:600;color:#475569">客户 *</label><select id="ofCustomer" style="height:40px">${custOpts}</select></div>
-        <div class="form-group"><label style="font-size:12px;font-weight:600;color:#475569">销售日期</label><input type="date" id="ofDate" value="${new Date().toISOString().slice(0,10)}" style="height:40px"></div>
-      </div>
-      <div class="of-grid3" style="margin-top:14px">
-        <div class="form-group"><label style="font-size:12px;font-weight:600;color:#475569">业务员</label><input type="text" id="ofAgent" style="height:40px"></div>
-        <div class="form-group"><label style="font-size:12px;font-weight:600;color:#475569">联系电话</label><input type="text" id="ofPhone" style="height:40px"></div>
-        <div class="form-group"><label style="font-size:12px;font-weight:600;color:#475569">快递公司</label><input type="text" id="ofExpress" style="height:40px"></div>
-      </div>
-    </div>
+    <div class="so-container">
+      <h1 class="so-title">销售单</h1>
 
-    <!-- 2. 产品明细 -->
-    <div class="of-section">
-      <div class="of-section-title">产品明细</div>
-      <div style="display:flex;gap:8px;margin-bottom:8px;padding:0 12px;font-size:11px;font-weight:600;color:#94A3B8;text-transform:uppercase;letter-spacing:.3px">
-        <div style="width:160px;flex-shrink:0">产品型号</div>
-        <div style="width:200px;flex-shrink:0">批次选择 <span style="color:#EF4444">*</span></div>
-        <div style="width:65px;flex-shrink:0">数量</div>
-        <div style="width:75px;flex-shrink:0">单价</div>
-        <div style="width:80px;flex-shrink:0;text-align:right">小计</div>
-        <div style="width:32px;flex-shrink:0"></div>
-      </div>
-      <div id="ofItems">
-        <div class="of-item of-item-row">
-          <select class="of-prod" onchange="onOfProdChange(this)" style="width:160px;flex-shrink:0"><option value="">选产品</option></select>
-          <select class="of-inv" style="width:200px;flex-shrink:0"><option value="">先选产品</option></select>
-          <input type="number" class="of-qty" step="0.1" min="0.1" value="1" oninput="updateOfTotal()" style="width:65px;flex-shrink:0;text-align:center">
-          <input type="number" class="of-price" step="0.01" value="0" oninput="updateOfTotal()" style="width:75px;flex-shrink:0;text-align:right" placeholder="0.00">
-          <span class="of-subtotal" style="width:80px;flex-shrink:0;font-size:14px;font-weight:600;text-align:right;color:#0F172A">¥0.00</span>
-          <button type="button" onclick="this.closest('.of-item').remove();updateOfTotal()" style="width:32px;flex-shrink:0;height:38px;background:none;border:none;color:#94A3B8;cursor:pointer;font-size:20px;padding:0;border-radius:6px;transition:all .15s;line-height:1" onmouseenter="this.style.background='#FEE2E2';this.style.color='#EF4444'" onmouseleave="this.style.background='none';this.style.color='#94A3B8'">&times;</button>
+      <!-- 销售日期 -->
+      <div class="so-row">
+        <div class="so-col">
+          <label class="so-label required">销售日期</label>
+          <input type="date" id="ofDate" value="${new Date().toISOString().slice(0,10)}" class="so-input">
         </div>
       </div>
-      <button type="button" class="btn btn-sm btn-outline" onclick="addOfItem()" style="margin-top:10px;font-weight:500">+ 添加产品</button>
-      <div style="display:flex;justify-content:flex-end;align-items:center;margin-top:12px;padding-top:12px;border-top:1px solid #E2E8F0">
-        <span class="of-summary">合计金额：<strong id="ofTotal" style="color:#3B82F6">¥0.00</strong></span>
-      </div>
-    </div>
 
-    <!-- 3. 订单选项 -->
-    <div class="of-section">
-      <div class="of-section-title">订单选项</div>
-      <div class="of-grid3">
-        <div class="form-group"><label style="font-size:12px;font-weight:600;color:#475569">托盘类型</label><select id="ofTray" style="height:40px"><option value="无">无</option><option value="单层">单层</option><option value="双层">双层</option></select></div>
-        <div class="form-group"><label style="font-size:12px;font-weight:600;color:#475569">防水</label><select id="ofWater" style="height:40px"><option value="否">否</option><option value="是">是</option></select></div>
-        <div class="form-group"><label style="font-size:12px;font-weight:600;color:#475569">COC</label><select id="ofCoc" style="height:40px"><option value="否">否</option><option value="是">是</option></select></div>
-        <div class="form-group"><label style="font-size:12px;font-weight:600;color:#475569">送货单</label><select id="ofDel" style="height:40px"><option value="否">否</option><option value="是">是</option></select></div>
-        <div class="form-group"><label style="font-size:12px;font-weight:600;color:#475569">退货单</label><select id="ofRet" style="height:40px"><option value="否">否</option><option value="是">是</option></select></div>
-        <div class="form-group"><label style="font-size:12px;font-weight:600;color:#475569">验货</label><select id="ofInsp" style="height:40px"><option value="否">否</option><option value="是">是</option></select></div>
+      <!-- 采购单位、经办人、电话 -->
+      <div class="so-row">
+        <div class="so-col-2">
+          <label class="so-label required">采购单位</label>
+          <select id="ofCustomer" class="so-select">${custOpts}</select>
+        </div>
+        <div class="so-col">
+          <label class="so-label">经办人</label>
+          <input type="text" id="ofAgent" class="so-input" placeholder="请输入">
+        </div>
+        <div class="so-col">
+          <label class="so-label">电话</label>
+          <input type="text" id="ofPhone" class="so-input" placeholder="请输入">
+        </div>
       </div>
-    </div>
 
-    <!-- 4. 财务信息 -->
-    <div class="of-section">
-      <div class="of-section-title">财务信息</div>
-      <div class="of-grid3">
-        <div class="form-group"><label style="font-size:12px;font-weight:600;color:#475569">发票税率</label><select id="ofRate" style="height:40px"><option value="无">无</option><option value="1%">1%</option><option value="13%">13%</option></select></div>
-        <div class="form-group"><label style="font-size:12px;font-weight:600;color:#475569">付款条件</label><select id="ofTerms" style="height:40px"><option value="已付">已付</option><option value="月结30天">月结30天</option><option value="月结90天">月结90天</option><option value="手动">手动</option></select></div>
-        <div class="form-group"><label style="font-size:12px;font-weight:600;color:#475569">付款状态</label><select id="ofPayStatus" style="height:40px"><option value="未付款">未付款</option><option value="已付款">已付款</option><option value="部分付款">部分付款</option></select></div>
-      </div>
-      <div style="margin-top:14px">
-        <div class="form-group"><label style="font-size:12px;font-weight:600;color:#475569">付款方式</label><input type="text" id="ofPayMethod" placeholder="如：转账 / 现金 / 支票" style="height:40px;max-width:300px"></div>
-      </div>
-    </div>
+      <!-- 数据录入标题 -->
+      <div style="font-size:13px;font-weight:600;color:#1E293B;margin:14px 0 8px;padding-left:2px">数据录入:</div>
 
-    <!-- 5. 附件上传 -->
-    <div class="of-section">
-      <div class="of-section-title">附件上传</div>
-      <div class="of-grid2">
-        <div>
-          <label style="font-size:12px;font-weight:600;color:#475569;margin-bottom:8px;display:block">合同 / 资质文件</label>
-          <div class="of-upload-zone" onclick="document.getElementById('ofDocFile').click()">
+      <!-- 产品明细表格 -->
+      <div class="so-table-wrapper">
+        <table class="so-table">
+          <thead>
+            <tr>
+              <th style="width:18%">型号</th>
+              <th style="width:22%">批号</th>
+              <th style="width:10%">库存</th>
+              <th style="width:12%">单价</th>
+              <th style="width:10%">数量</th>
+              <th style="width:12%">小计</th>
+              <th style="width:6%"></th>
+            </tr>
+          </thead>
+          <tbody id="ofItems">
+            <tr class="item-row">
+              <td>
+                <select class="so-item-select of-prod" onchange="onOfProdChange(this)">
+                  <option value="">请选择</option>
+                </select>
+              </td>
+              <td>
+                <select class="so-item-select of-inv" disabled>
+                  <option value="">先选产品</option>
+                </select>
+              </td>
+              <td><span id="stock_0" class="stock-warning">0</span></td>
+              <td><input type="number" class="so-item-input of-price" step="0.01" value="0" oninput="updateOfTotal()" placeholder="0.00"></td>
+              <td><input type="number" class="so-item-input of-qty" step="0.1" min="0.1" value="1" oninput="updateOfTotal()" style="text-align:center"></td>
+              <td style="font-weight:600;color:#1E293B" class="of-subtotal">¥0.00</td>
+              <td><button type="button" class="so-delete-btn" onclick="removeOfItem(this)">&times;</button></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      
+      <button type="button" class="so-add-btn" onclick="addOfItem()">+ 添加产品</button>
+      
+      <div class="so-total-bar">
+        <span class="so-total-label">总计:</span>
+        <span class="so-total-value" id="ofTotal">¥0.00</span>
+      </div>
+
+      <!-- 备注和上传 -->
+      <div class="so-row" style="margin-top:14px">
+        <div class="so-col-2">
+          <label class="so-label">备注</label>
+          <textarea id="ofNotes" class="so-textarea" placeholder="请输入内容"></textarea>
+        </div>
+        <div class="so-col">
+          <label class="so-label">上传文件</label>
+          <div class="so-upload-area" onclick="document.getElementById('ofDocFile').click()">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><polyline points="9 15 12 18 15 15"/></svg>
-            <div class="of-upload-text">点击上传合同 / 资质</div>
-            <div class="of-upload-hint">支持 PDF、Word、Excel、图片 (≤10MB)</div>
+            <div class="so-upload-text">点击上传文件</div>
+            <div class="so-upload-hint">支持 PDF、Word、图片</div>
           </div>
           <input type="file" id="ofDocFile" style="display:none" accept=".pdf,.doc,.docx,.xls,.xlsx,image/*" multiple onchange="ofAddFiles('doc', this)">
-          <div class="of-file-list" id="ofDocList"></div>
+          <div class="so-file-list" id="ofDocList"></div>
         </div>
-        <div>
-          <label style="font-size:12px;font-weight:600;color:#475569;margin-bottom:8px;display:block">产品发货图片</label>
-          <div class="of-upload-zone" onclick="document.getElementById('ofShipFile').click()">
+      </div>
+
+      <!-- 选项区域 -->
+      <div style="font-size:13px;font-weight:600;color:#1E293B;margin:14px 0 10px;padding-left:2px">订单选项:</div>
+
+      <!-- 第一行开关 -->
+      <div class="so-row">
+        <div class="so-switch-group">
+          <span class="so-switch-label">托盘:</span>
+          <label class="so-radio"><input type="radio" name="tray" value="无" checked><label>无</label></label>
+          <label class="so-radio"><input type="radio" name="tray" value="单层"><label>单面</label></label>
+          <label class="so-radio"><input type="radio" name="tray" value="双层"><label>双面</label></label>
+        </div>
+        <div class="so-col"></div>
+        <div class="so-switch-group">
+          <span class="so-switch-label">防水:</span>
+          <label class="so-switch"><input type="checkbox" id="ofWater"><span class="so-switch-track"></span></label>
+        </div>
+        <div class="so-switch-group">
+          <span class="so-switch-label">COC:</span>
+          <label class="so-switch"><input type="checkbox" id="ofCoc"><span class="so-switch-track"></span></label>
+        </div>
+        <div class="so-switch-group">
+          <span class="so-switch-label">送货单:</span>
+          <label class="so-switch"><input type="checkbox" id="ofDel"><span class="so-switch-track"></span></label>
+        </div>
+        <div class="so-switch-group">
+          <span class="so-switch-label">回单:</span>
+          <label class="so-switch"><input type="checkbox" id="ofRet"><span class="so-switch-track"></span></label>
+        </div>
+      </div>
+
+      <!-- 第二行开关 -->
+      <div class="so-row">
+        <div class="so-switch-group">
+          <span class="so-switch-label">抽检:</span>
+          <label class="so-switch"><input type="checkbox" id="ofInsp" onchange="document.getElementById('ofShipSection').style.display=this.checked?'block':'none'"><span class="so-switch-track"></span></label>
+        </div>
+        <div class="so-col" id="ofShipSection" style="display:none">
+          <label class="so-upload-area" style="cursor:pointer;display:block" onclick="document.getElementById('ofShipFile').click()">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
-            <div class="of-upload-text">点击上传发货图片</div>
-            <div class="of-upload-hint">支持 JPG、PNG、WebP (≤10MB)</div>
-          </div>
+            <div class="so-upload-text">上传抽检图片</div>
+          </label>
           <input type="file" id="ofShipFile" style="display:none" accept="image/*" multiple onchange="ofAddFiles('ship', this)">
-          <div class="of-file-list" id="ofShipList"></div>
+          <div class="so-file-list" id="ofShipList"></div>
+        </div>
+      </div>
+
+      <!-- 财务信息 -->
+      <div style="font-size:13px;font-weight:600;color:#1E293B;margin:14px 0 10px;padding-left:2px">财务信息:</div>
+
+      <!-- 发票税率和付款条件 -->
+      <div class="so-row">
+        <div class="so-col">
+          <label class="so-label">发票:</label>
+          <div class="so-radio-group">
+            <label class="so-radio"><input type="radio" name="invoice" value="无" checked><label>无</label></label>
+            <label class="so-radio"><input type="radio" name="invoice" value="1%"><label>1%</label></label>
+            <label class="so-radio"><input type="radio" name="invoice" value="13%"><label>13%</label></label>
+          </div>
+        </div>
+        <div class="so-col">
+          <label class="so-label">付款:</label>
+          <div class="so-radio-group">
+            <label class="so-radio"><input type="radio" name="payment" value="已付"><label>已付</label></label>
+            <label class="so-radio"><input type="radio" name="payment" value="月结30天" checked><label>缓付30天</label></label>
+            <label class="so-radio"><input type="radio" name="payment" value="月结90天"><label>缓90天</label></label>
+            <label class="so-radio"><input type="radio" name="payment" value="手动"><label>手动</label></label>
+          </div>
+        </div>
+        <div class="so-col">
+          <label class="so-label">快递:</label>
+          <select id="ofExpress" class="so-select">
+            <option value="顺丰">顺丰</option>
+            <option value="中通">中通</option>
+            <option value="圆通">圆通</option>
+            <option value="申通">申通</option>
+            <option value="韵达">韵达</option>
+            <option value="EMS">EMS</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- 付款方式 -->
+      <div class="so-row">
+        <div class="so-col">
+          <label class="so-label">付款方式</label>
+          <input type="text" id="ofPayMethod" class="so-input" placeholder="如：转账 / 现金 / 支票">
         </div>
       </div>
     </div>
-
-    <!-- 6. 备注 -->
-    <div class="of-section">
-      <div class="of-section-title">备注</div>
-      <textarea id="ofNotes" rows="2" placeholder="订单备注（可选）" style="width:100%;border:1.5px solid #E2E8F0;border-radius:8px;padding:10px 14px;font-size:13px;font-family:inherit;outline:none;resize:vertical;min-height:60px"></textarea>
-    </div>
   `, `
-    <button class="btn btn-outline" onclick="Modal.close();window._ofPendingFiles=null">取消</button>
-    <button class="btn btn-primary btn-lg" onclick="execCreateOrder()">提交订单</button>
+    <button class="btn btn-outline" onclick="Modal.close();window._ofPendingFiles=null">清理表单</button>
+    <button class="btn btn-primary btn-lg" onclick="execCreateOrder()">提交销售单</button>
   `);
 
   // 初始化待上传文件列表
@@ -506,10 +842,10 @@ function ofAddFiles(type, input) {
   window._ofPendingFiles[type].push(...files);
 
   listEl.innerHTML = window._ofPendingFiles[type].map((f, i) => `
-    <div class="of-file-item">
-      <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escHtml(f.name)}</span>
-      <span style="color:#94A3B8;flex-shrink:0">${(f.size/1024).toFixed(1)}KB</span>
-      <button type="button" onclick="ofRemoveFile('${type}',${i})" style="background:none;border:none;color:#EF4444;cursor:pointer;font-size:14px;padding:2px 4px">&times;</button>
+    <div class="so-file-item">
+      <span class="so-file-name">${escHtml(f.name)}</span>
+      <span class="so-file-size">${(f.size/1024).toFixed(1)}KB</span>
+      <span class="so-file-remove" onclick="ofRemoveFile('${type}',${i})">&times;</span>
     </div>`).join('');
   input.value = '';
 }
@@ -518,35 +854,69 @@ function ofRemoveFile(type, index) {
   window._ofPendingFiles[type].splice(index, 1);
   const listEl = document.getElementById(type === 'doc' ? 'ofDocList' : 'ofShipList');
   listEl.innerHTML = window._ofPendingFiles[type].map((f, i) => `
-    <div class="of-file-item">
-      <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escHtml(f.name)}</span>
-      <span style="color:#94A3B8;flex-shrink:0">${(f.size/1024).toFixed(1)}KB</span>
-      <button type="button" onclick="ofRemoveFile('${type}',${i})" style="background:none;border:none;color:#EF4444;cursor:pointer;font-size:14px;padding:2px 4px">&times;</button>
+    <div class="so-file-item">
+      <span class="so-file-name">${escHtml(f.name)}</span>
+      <span class="so-file-size">${(f.size/1024).toFixed(1)}KB</span>
+      <span class="so-file-remove" onclick="ofRemoveFile('${type}',${i})">&times;</span>
     </div>`).join('');
 }
 
 function addOfItem() {
   const container = document.getElementById('ofItems');
-  const template = container.querySelector('.of-item').cloneNode(true);
-  const inputs = template.querySelectorAll('input');
-  inputs.forEach(i => {
-    if (i.classList.contains('of-qty')) i.value = '1';
-    else if (i.classList.contains('of-price')) i.value = '0';
-    else i.value = '';
-  });
-  template.querySelector('.of-subtotal').textContent = '¥0.00';
-  template.querySelector('.of-inv').innerHTML = '<option value="">先选产品</option>';
-  // Add event listeners for qty/price change
-  template.querySelector('.of-qty').oninput = updateOfTotal;
-  template.querySelector('.of-price').oninput = updateOfTotal;
-  container.appendChild(template);
+  const rows = container.querySelectorAll('.item-row');
+  const newIndex = rows.length;
+  
+  // 使用 insertRow 避免 innerHTML 导致表格重新解析
+  const newRow = container.insertRow();
+  newRow.className = 'item-row';
+  
+  const prodOpts = window._ofProds ? 
+    '<option value="">选产品</option>' + window._ofProds.map(p => `<option value="${p.id}">${escHtml(p.model)}</option>`).join('') : 
+    '<option value="">选产品</option>';
+  
+  newRow.innerHTML = `
+    <td>
+      <select class="so-item-select of-prod" onchange="onOfProdChange(this)">${prodOpts}</select>
+    </td>
+    <td>
+      <select class="so-item-select of-inv" disabled>
+        <option value="">先选产品</option>
+      </select>
+    </td>
+    <td><span id="stock_${newIndex}" class="stock-warning">0</span></td>
+    <td><input type="number" class="so-item-input of-price" step="0.01" value="0" oninput="updateOfTotal()" placeholder="0.00"></td>
+    <td><input type="number" class="so-item-input of-qty" step="0.1" min="0.1" value="1" oninput="updateOfTotal()" style="text-align:center"></td>
+    <td style="font-weight:600;color:#1E293B" class="of-subtotal">¥0.00</td>
+    <td><button type="button" class="so-delete-btn" onclick="removeOfItem(this)">&times;</button></td>
+  `;
+}
+
+function removeOfItem(btn) {
+  const row = btn.closest('.item-row');
+  const container = document.getElementById('ofItems');
+  const rows = container.querySelectorAll('.item-row');
+  
+  if (rows.length > 1) {
+    row.remove();
+    updateOfTotal();
+  } else {
+    Toast.warning('至少保留一条产品明细');
+  }
 }
 
 let _invCache = {};
 async function onOfProdChange(sel) {
   const prodId = sel.value;
-  const invSel = sel.closest('.of-item').querySelector('.of-inv');
-  if (!prodId) { invSel.innerHTML = '<option value="">先选产品</option>'; return; }
+  const row = sel.closest('.item-row');
+  const invSel = row.querySelector('.of-inv');
+  const stockSpan = row.querySelector('[id^="stock_"]');
+  
+  if (!prodId) {
+    invSel.innerHTML = '<option value="">先选产品</option>';
+    invSel.disabled = true;
+    stockSpan.textContent = '0';
+    return;
+  }
 
   try {
     if (!_invCache[prodId]) {
@@ -554,13 +924,24 @@ async function onOfProdChange(sel) {
       _invCache[prodId] = res.data;
     }
     const invs = _invCache[prodId];
-    invSel.innerHTML = '<option value="">选批次</option>' + invs.map(i => `<option value="${i.id}" data-qty="${i.quantity}">${i.batch_number} (库存: ${i.quantity})</option>`).join('');
-  } catch (_) { invSel.innerHTML = '<option value="">加载失败</option>'; }
+    invSel.innerHTML = '<option value="">选批次</option>' + invs.map(i => `<option value="${i.id}" data-qty="${i.quantity}">${i.batch_number}</option>`).join('');
+    invSel.disabled = false;
+    
+    const updateStock = () => {
+      const selected = invSel.options[invSel.selectedIndex];
+      const qty = selected ? selected.getAttribute('data-qty') : '0';
+      stockSpan.textContent = qty;
+    };
+    invSel.onchange = updateStock;
+  } catch (_) { 
+    invSel.innerHTML = '<option value="">加载失败</option>'; 
+    invSel.disabled = true;
+  }
 }
 
 function updateOfTotal() {
   let total = 0;
-  document.querySelectorAll('.of-item').forEach(el => {
+  document.querySelectorAll('.item-row').forEach(el => {
     const qty = parseFloat(el.querySelector('.of-qty').value) || 0;
     const price = parseFloat(el.querySelector('.of-price').value) || 0;
     const sub = qty * price;
@@ -574,9 +955,10 @@ function updateOfTotal() {
 async function execCreateOrder() {
   try {
     const items = [];
-    document.querySelectorAll('.of-item').forEach(el => {
+    document.querySelectorAll('.item-row').forEach(el => {
       const prodId = parseInt(el.querySelector('.of-prod').value);
-      const invId = parseInt(el.querySelector('.of-inv').value);
+      const invSel = el.querySelector('.of-inv');
+      const invId = invSel.disabled ? null : parseInt(invSel.value);
       const qty = parseFloat(el.querySelector('.of-qty').value);
       const price = parseFloat(el.querySelector('.of-price').value);
       if (prodId && invId && qty >= 0.1) {
@@ -586,43 +968,46 @@ async function execCreateOrder() {
 
     if (items.length === 0) { Toast.warning('请至少添加一条产品明细'); return; }
 
+    const customerId = parseInt(document.getElementById('ofCustomer').value);
+    if (!customerId) { Toast.warning('请选择客户'); return; }
+
+    const trayType = document.querySelector('input[name="tray"]:checked').value;
+    const invoiceRate = document.querySelector('input[name="invoice"]:checked').value;
+    const paymentTerms = document.querySelector('input[name="payment"]:checked').value;
+
     const body = {
-      customer_id: parseInt(document.getElementById('ofCustomer').value),
+      customer_id: customerId,
       sales_date: document.getElementById('ofDate').value,
       agent_name: document.getElementById('ofAgent').value.trim(),
       contact_phone: document.getElementById('ofPhone').value.trim(),
       express_company: document.getElementById('ofExpress').value.trim(),
       payment_method: document.getElementById('ofPayMethod').value.trim(),
-      payment_status: document.getElementById('ofPayStatus').value,
-      tray_type: document.getElementById('ofTray').value,
-      waterproof: document.getElementById('ofWater').value,
-      coc: document.getElementById('ofCoc').value,
-      delivery_note: document.getElementById('ofDel').value,
-      return_note: document.getElementById('ofRet').value,
-      inspection: document.getElementById('ofInsp').value,
-      invoice_rate: document.getElementById('ofRate').value,
-      payment_terms: document.getElementById('ofTerms').value,
+      payment_terms: paymentTerms,
+      tray_type: trayType,
+      waterproof: document.getElementById('ofWater').checked ? '是' : '否',
+      coc: document.getElementById('ofCoc').checked ? '是' : '否',
+      delivery_note: document.getElementById('ofDel').checked ? '是' : '否',
+      return_note: document.getElementById('ofRet').checked ? '是' : '否',
+      inspection: document.getElementById('ofInsp').checked ? '是' : '否',
+      invoice_rate: invoiceRate,
       notes: document.getElementById('ofNotes').value,
       items,
     };
-
-    if (!body.customer_id) { Toast.warning('请选择客户'); return; }
 
     const res = await API.post('/orders', body);
     const orderId = res.data.id;
     Toast.success('订单创建成功');
 
-    // 上传附件
     const pending = window._ofPendingFiles;
     if (pending && (pending.doc.length > 0 || pending.ship.length > 0)) {
       const token = Auth.getToken();
       for (const f of pending.doc) {
-        const fd = new FormData(); fd.append('file', f); fd.append('file_type', '合同资质');
-        await fetch('/api/orders/' + orderId + '/files', { method: 'POST', headers: { 'Authorization': 'Bearer ' + token }, body: fd });
+        const fd = new FormData(); fd.append('file', f);
+        await fetch('/api/orders/' + orderId + '/files/document', { method: 'POST', headers: { 'Authorization': 'Bearer ' + token }, body: fd });
       }
       for (const f of pending.ship) {
-        const fd = new FormData(); fd.append('file', f); fd.append('file_type', '发货图片');
-        await fetch('/api/orders/' + orderId + '/files', { method: 'POST', headers: { 'Authorization': 'Bearer ' + token }, body: fd });
+        const fd = new FormData(); fd.append('file', f);
+        await fetch('/api/orders/' + orderId + '/files/shipment', { method: 'POST', headers: { 'Authorization': 'Bearer ' + token }, body: fd });
       }
     }
 
@@ -635,16 +1020,22 @@ async function execCreateOrder() {
 async function viewOrder(id) {
   const res = await API.get('/orders/' + id);
   const o = res.data;
+  document.getElementById('modalBox').style.width = '860px';
+
   const itemsHtml = o.items.map(i => `
     <tr><td>${escHtml(i.product_model)}</td><td>${i.batch_number||'-'}</td><td>${i.quantity}</td><td>¥${Number(i.unit_price).toFixed(2)}</td><td>¥${Number(i.subtotal).toFixed(2)}</td><td>${i.bin_number ? escHtml(i.bin_number)+(i.bin_location?'('+escHtml(i.bin_location)+')':'') : '-'}</td></tr>
   `).join('');
 
-  const filesHtml = (o.files||[]).length > 0 ? o.files.map(f => `
-    <div style="display:flex;align-items:center;gap:8px;padding:4px 0;font-size:13px">
-      <span>${f.file_type==='合同资质'?'📄':'📷'}</span>
-      <a href="${f.file_path}" target="_blank" style="flex:1">${escHtml(f.file_name)}</a>
-      <span style="color:var(--color-text-muted)">${(f.file_size/1024).toFixed(1)}KB</span>
-    </div>`).join('') : '<p style="color:var(--color-text-muted);font-size:13px">暂无附件</p>';
+  const docFiles = (o.files||[]).filter(f => f.file_type==='合同资质');
+  const shipFiles = (o.files||[]).filter(f => f.file_type==='发货图片');
+  const fileSection = (files, title) => files.length > 0 ? `
+    <div style="margin-bottom:8px"><strong style="font-size:12px;color:#475569">${title} (${files.length})</strong></div>
+    ${files.map(f => `
+      <div style="display:flex;align-items:center;gap:8px;padding:6px 10px;background:#F8FAFC;border-radius:6px;margin-bottom:3px;font-size:13px">
+        <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"><a href="${f.file_path}" target="_blank">${escHtml(f.file_name)}</a></span>
+        <span style="color:#94A3B8;flex-shrink:0">${(f.file_size/1024).toFixed(1)}KB</span>
+        <button onclick="deleteOrderFile(${o.id},${f.id})" style="background:none;border:none;color:#EF4444;cursor:pointer;font-size:14px;padding:2px 6px;flex-shrink:0">&times;</button>
+      </div>`).join('')}` : `<p style="font-size:13px;color:#94A3B8">暂无${title}</p>`;
 
   const canTransition = { '待处理': ['处理中', '已取消'], '处理中': ['已完成', '已取消'] };
   const btns = (canTransition[o.status] || []).map(s => {
@@ -652,19 +1043,167 @@ async function viewOrder(id) {
     return `<button class="btn btn-sm ${cls}" onclick="changeOrderStatus(${o.id},'${s}')">→ ${s}</button>`;
   }).join(' ');
 
+  const badge = (v, map) => { for(const [k,cls] of Object.entries(map)) if(v===k) return cls; return 'badge-default'; };
+
   Modal.open('订单详情 — ' + o.order_number, `
-    <p>客户：<strong>${escHtml(o.customer_name)}</strong> | 状态：<span class="badge">${o.status}</span> | 付款：<span class="badge">${o.payment_status}</span></p>
-    <p style="font-size:13px;color:var(--color-text-secondary)">业务员：${escHtml(o.agent_name||'-')} | 日期：${o.sales_date||'-'} | 合计：<strong>¥${Number(o.total_amount).toFixed(2)}</strong></p>
-    <div class="table-container" style="margin-top:12px"><table>
-      <thead><tr><th>产品</th><th>批号</th><th>数量</th><th>单价</th><th>小计</th><th>箱号</th></tr></thead>
-      <tbody>${itemsHtml}</tbody></table></div>
-    <div style="margin-top:12px"><strong>附件</strong>${filesHtml}</div>
-    ${o.notes ? `<p style="margin-top:8px;font-size:13px"><strong>备注：</strong>${escHtml(o.notes)}</p>` : ''}
+    <div class="of-section"><div class="of-section-title">基本信息</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;font-size:13px">
+        <div><span style="color:#64748B">客户：</span><strong>${escHtml(o.customer_name)}</strong></div>
+        <div><span style="color:#64748B">订单号：</span><strong>${escHtml(o.order_number)}</strong></div>
+        <div><span style="color:#64748B">日期：</span>${o.sales_date||'-'}</div>
+        <div><span style="color:#64748B">业务员：</span>${escHtml(o.agent_name||'-')}</div>
+        <div><span style="color:#64748B">电话：</span>${escHtml(o.contact_phone||'-')}</div>
+        <div><span style="color:#64748B">状态：</span><span class="badge ${badge(o.status,{'已完成':'badge-success','处理中':'badge-info','待处理':'badge-warning','已取消':'badge-default'})}">${o.status}</span></div>
+        <div style="grid-column:1/-1"><span style="color:#64748B">快递：</span><strong>${escHtml(o.express_company||'未指定')}</strong></div>
+        <div style="grid-column:1/-1"><span style="color:#64748B">合计：</span><strong style="font-size:18px;color:#3B82F6">¥${Number(o.total_amount).toFixed(2)}</strong></div>
+      </div>
+    </div>
+
+    <div class="of-section"><div class="of-section-title">产品明细</div>
+      <div class="table-container"><table>
+        <thead><tr><th>产品</th><th>批号</th><th>数量</th><th>单价</th><th>小计</th><th>箱号</th></tr></thead>
+        <tbody>${itemsHtml}</tbody></table></div>
+    </div>
+
+    <div class="of-section"><div class="of-section-title">订单选项</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;font-size:13px">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;border:1.5px solid #E2E8F0;border-radius:6px;padding:8px 12px"><span style="color:#64748B">托盘</span><strong style="color:${(o.tray_type||'无')==='无'?'#94A3B8':'#3B82F6'}">${o.tray_type||'无'}</strong></div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;border:1.5px solid ${o.waterproof==='是'?'#10B981':'#E2E8F0'};border-radius:6px;padding:8px 12px;background:${o.waterproof==='是'?'#F0FDF4':'#fff'}"><span style="color:#64748B">防水</span><strong style="color:${o.waterproof==='是'?'#059669':'#94A3B8'}">${o.waterproof||'否'}</strong></div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;border:1.5px solid ${o.coc==='是'?'#10B981':'#E2E8F0'};border-radius:6px;padding:8px 12px;background:${o.coc==='是'?'#F0FDF4':'#fff'}"><span style="color:#64748B">COC</span><strong style="color:${o.coc==='是'?'#059669':'#94A3B8'}">${o.coc||'否'}</strong></div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;border:1.5px solid ${o.delivery_note==='是'?'#10B981':'#E2E8F0'};border-radius:6px;padding:8px 12px;background:${o.delivery_note==='是'?'#F0FDF4':'#fff'}"><span style="color:#64748B">送货单</span><strong style="color:${o.delivery_note==='是'?'#059669':'#94A3B8'}">${o.delivery_note||'否'}</strong></div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;border:1.5px solid ${o.return_note==='是'?'#10B981':'#E2E8F0'};border-radius:6px;padding:8px 12px;background:${o.return_note==='是'?'#F0FDF4':'#fff'}"><span style="color:#64748B">退货单</span><strong style="color:${o.return_note==='是'?'#059669':'#94A3B8'}">${o.return_note||'否'}</strong></div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;border:1.5px solid ${o.inspection==='是'?'#10B981':'#E2E8F0'};border-radius:6px;padding:8px 12px;background:${o.inspection==='是'?'#F0FDF4':'#fff'}"><span style="color:#64748B">验货</span><strong style="color:${o.inspection==='是'?'#059669':'#94A3B8'}">${o.inspection||'否'}</strong></div>
+      </div>
+    </div>
+
+    <div class="of-section"><div class="of-section-title">财务信息</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;font-size:13px">
+        <div style="border:1.5px solid #E2E8F0;border-radius:6px;padding:10px 14px"><span style="color:#64748B;display:block;font-size:11px;margin-bottom:2px">发票税率</span><strong>${o.invoice_rate||'无'}</strong></div>
+        <div style="border:1.5px solid #E2E8F0;border-radius:6px;padding:10px 14px"><span style="color:#64748B;display:block;font-size:11px;margin-bottom:2px">付款条件</span><strong>${o.payment_terms||'已付'}</strong><span style="font-size:11px;color:#94A3B8;margin-left:6px">${escHtml(o.payment_term_manual||'')}</span></div>
+        <div style="border:1.5px solid #E2E8F0;border-radius:6px;padding:10px 14px"><span style="color:#64748B;display:block;font-size:11px;margin-bottom:2px">付款方式</span><strong>${escHtml(o.payment_method||'-')}</strong></div>
+      </div>
+      <div style="margin-top:8px;font-size:13px;text-align:right">
+        付款状态：<span class="badge ${badge(o.payment_status,{'已付款':'badge-success','部分付款':'badge-warning','未付款':'badge-default'})}">${o.payment_status}</span>
+      </div>
+    </div>
+
+    <div class="of-section"><div class="of-section-title">附件</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+        <div>
+          <div style="font-size:12px;font-weight:600;color:#475569;margin-bottom:8px">合同 / 资质 (${docFiles.length})</div>
+          ${docFiles.length > 0 ? docFiles.map(f => `
+            <div style="display:flex;align-items:center;gap:8px;padding:8px 12px;background:#F8FAFC;border:1px solid #E2E8F0;border-radius:6px;margin-bottom:4px;font-size:13px">
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="#94A3B8" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+              <a href="${f.file_path}" target="_blank" download style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#3B82F6;text-decoration:none">${escHtml(f.file_name)}</a>
+              <span style="color:#94A3B8;flex-shrink:0;font-size:11px">${(f.file_size/1024).toFixed(1)}KB</span>
+              <button onclick="deleteOrderFile(${o.id},${f.id})" style="background:none;border:none;color:#EF4444;cursor:pointer;font-size:14px;padding:2px 6px;flex-shrink:0" title="删除">&times;</button>
+            </div>`).join('') : `<p style="font-size:13px;color:#94A3B8;padding:12px;background:#F8FAFC;border-radius:6px;text-align:center">暂无文件</p>`}
+        </div>
+        <div>
+          <div style="font-size:12px;font-weight:600;color:#475569;margin-bottom:8px">发货图片 (${shipFiles.length})</div>
+          ${shipFiles.length > 0 ? shipFiles.map(f => `
+            <div style="display:flex;align-items:center;gap:8px;padding:8px 12px;background:#F8FAFC;border:1px solid #E2E8F0;border-radius:6px;margin-bottom:4px;font-size:13px">
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="#94A3B8" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+              <a href="${f.file_path}" target="_blank" style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#3B82F6;text-decoration:none">${escHtml(f.file_name)}</a>
+              <span style="color:#94A3B8;flex-shrink:0;font-size:11px">${(f.file_size/1024).toFixed(1)}KB</span>
+              <button onclick="deleteOrderFile(${o.id},${f.id})" style="background:none;border:none;color:#EF4444;cursor:pointer;font-size:14px;padding:2px 6px;flex-shrink:0" title="删除">&times;</button>
+            </div>`).join('') : `<p style="font-size:13px;color:#94A3B8;padding:12px;background:#F8FAFC;border-radius:6px;text-align:center">暂无图片</p>`}
+        </div>
+      </div>
+    </div>
+
+    ${o.notes ? `<div class="of-section"><div class="of-section-title">备注</div><p style="font-size:13px;white-space:pre-wrap">${escHtml(o.notes)}</p></div>` : ''}
   `, `
     ${btns}
     <button class="btn btn-sm btn-outline" onclick="uploadOrderFile(${o.id})">上传文件</button>
     <button class="btn btn-outline" onclick="Modal.close()">关闭</button>
   `);
+}
+
+// 删除订单文件
+async function deleteOrderFile(orderId, fileId) {
+  if (!confirm('确认删除该文件？')) return;
+  try { await API.delete('/orders/' + orderId + '/files/' + fileId); Toast.success('文件已删除'); viewOrder(orderId); }
+  catch (err) { Toast.error(err.message); }
+}
+
+// 编辑订单
+async function editOrder(id) {
+  const [ordRes, custRes] = await Promise.all([
+    API.get('/orders/' + id),
+    API.get('/customers?limit=200'),
+  ]);
+  const o = ordRes.data;
+  const customers = custRes.data.list || [];
+  const custOpts = customers.map(c => `<option value="${c.id}" ${c.id===o.customer_id?'selected':''}>${escHtml(c.name)}${c.company?' ('+escHtml(c.company)+')':''}</option>`).join('');
+
+  document.getElementById('modalBox').style.width = '760px';
+  Modal.open('编辑订单 — ' + o.order_number, `
+    <div class="of-section"><div class="of-section-title">基本信息</div>
+      <div class="of-grid2">
+        <div class="form-group"><label style="font-size:12px;font-weight:600;color:#475569">客户 *</label><select id="efCustomer" style="height:40px"><option value="">请选择</option>${custOpts}</select></div>
+        <div class="form-group"><label style="font-size:12px;font-weight:600;color:#475569">销售日期</label><input type="date" id="efDate" value="${o.sales_date||''}" style="height:40px"></div>
+      </div>
+      <div class="of-grid3" style="margin-top:14px">
+        <div class="form-group"><label style="font-size:12px;font-weight:600;color:#475569">业务员</label><input type="text" id="efAgent" value="${escHtml(o.agent_name||'')}" style="height:40px"></div>
+        <div class="form-group"><label style="font-size:12px;font-weight:600;color:#475569">联系电话</label><input type="text" id="efPhone" value="${escHtml(o.contact_phone||'')}" style="height:40px"></div>
+        <div class="form-group"><label style="font-size:12px;font-weight:600;color:#475569">快递公司</label><input type="text" id="efExpress" value="${escHtml(o.express_company||'')}" style="height:40px"></div>
+      </div>
+    </div>
+    <div class="of-section"><div class="of-section-title">订单选项</div>
+      <div class="of-grid3">
+        <div class="form-group"><label style="font-size:12px;font-weight:600;color:#475569">托盘类型</label><select id="efTray" style="height:40px">${['无','单层','双层'].map(v=>`<option ${o.tray_type===v?'selected':''}>${v}</option>`).join('')}</select></div>
+        <div class="form-group"><label style="font-size:12px;font-weight:600;color:#475569">防水</label><select id="efWater" style="height:40px">${['否','是'].map(v=>`<option ${o.waterproof===v?'selected':''}>${v}</option>`).join('')}</select></div>
+        <div class="form-group"><label style="font-size:12px;font-weight:600;color:#475569">COC</label><select id="efCoc" style="height:40px">${['否','是'].map(v=>`<option ${o.coc===v?'selected':''}>${v}</option>`).join('')}</select></div>
+        <div class="form-group"><label style="font-size:12px;font-weight:600;color:#475569">送货单</label><select id="efDel" style="height:40px">${['否','是'].map(v=>`<option ${o.delivery_note===v?'selected':''}>${v}</option>`).join('')}</select></div>
+        <div class="form-group"><label style="font-size:12px;font-weight:600;color:#475569">退货单</label><select id="efRet" style="height:40px">${['否','是'].map(v=>`<option ${o.return_note===v?'selected':''}>${v}</option>`).join('')}</select></div>
+        <div class="form-group"><label style="font-size:12px;font-weight:600;color:#475569">验货</label><select id="efInsp" style="height:40px">${['否','是'].map(v=>`<option ${o.inspection===v?'selected':''}>${v}</option>`).join('')}</select></div>
+      </div>
+    </div>
+    <div class="of-section"><div class="of-section-title">财务信息</div>
+      <div class="of-grid3">
+        <div class="form-group"><label style="font-size:12px;font-weight:600;color:#475569">发票税率</label><select id="efRate" style="height:40px">${['无','1%','13%'].map(v=>`<option ${o.invoice_rate===v?'selected':''}>${v}</option>`).join('')}</select></div>
+        <div class="form-group"><label style="font-size:12px;font-weight:600;color:#475569">付款条件</label><select id="efTerms" style="height:40px">${['已付','月结30天','月结90天','手动'].map(v=>`<option ${o.payment_terms===v?'selected':''}>${v}</option>`).join('')}</select></div>
+        <div class="form-group"><label style="font-size:12px;font-weight:600;color:#475569">付款状态</label><select id="efPayStatus" style="height:40px">${['未付款','已付款','部分付款'].map(v=>`<option ${o.payment_status===v?'selected':''}>${v}</option>`).join('')}</select></div>
+      </div>
+      <div style="margin-top:14px"><div class="form-group"><label style="font-size:12px;font-weight:600;color:#475569">付款方式</label><input type="text" id="efPayMethod" value="${escHtml(o.payment_method||'')}" style="height:40px;max-width:300px"></div></div>
+    </div>
+    <div class="of-section"><div class="of-section-title">备注</div>
+      <textarea id="efNotes" rows="2" style="width:100%;border:1.5px solid #E2E8F0;border-radius:8px;padding:10px 14px;font-size:13px;font-family:inherit;outline:none;min-height:60px">${escHtml(o.notes||'')}</textarea>
+    </div>
+    <p style="font-size:12px;color:#94A3B8;margin-top:8px">* 产品明细和附件请在订单详情中管理，编辑仅修改订单基本信息和选项</p>
+  `, `
+    <button class="btn btn-outline" onclick="Modal.close()">取消</button>
+    <button class="btn btn-primary" onclick="execEditOrder(${o.id})">保存修改</button>
+  `);
+}
+
+async function execEditOrder(id) {
+  try {
+    const body = {
+      customer_id: parseInt(document.getElementById('efCustomer').value),
+      sales_date: document.getElementById('efDate').value,
+      agent_name: document.getElementById('efAgent').value.trim(),
+      contact_phone: document.getElementById('efPhone').value.trim(),
+      express_company: document.getElementById('efExpress').value.trim(),
+      payment_method: document.getElementById('efPayMethod').value.trim(),
+      payment_status: document.getElementById('efPayStatus').value,
+      tray_type: document.getElementById('efTray').value,
+      waterproof: document.getElementById('efWater').value,
+      coc: document.getElementById('efCoc').value,
+      delivery_note: document.getElementById('efDel').value,
+      return_note: document.getElementById('efRet').value,
+      inspection: document.getElementById('efInsp').value,
+      invoice_rate: document.getElementById('efRate').value,
+      payment_terms: document.getElementById('efTerms').value,
+      notes: document.getElementById('efNotes').value,
+    };
+    if (!body.customer_id) { Toast.warning('请选择客户'); return; }
+    await API.put('/orders/' + id, body);
+    Toast.success('订单更新成功');
+    Modal.close();
+    loadOrdList(document.getElementById('contentArea'), ordPage, ordSearch, ordStatus, ordPayStatus);
+  } catch (err) { Toast.error(err.message); }
 }
 
 async function changeOrderStatus(id, newStatus) {
@@ -693,10 +1232,11 @@ async function execUploadFile(orderId) {
   try {
     const formData = new FormData();
     formData.append('file', document.getElementById('ufFile').files[0]);
-    formData.append('file_type', document.getElementById('ufType').value);
     formData.append('description', document.getElementById('ufDesc').value);
+    const fileType = document.getElementById('ufType').value;
+    const typePath = fileType === '发货图片' ? 'shipment' : 'document';
     const token = Auth.getToken();
-    await fetch('/api/orders/' + orderId + '/files', { method: 'POST', headers: { 'Authorization': 'Bearer ' + token }, body: formData });
+    await fetch('/api/orders/' + orderId + '/files/' + typePath, { method: 'POST', headers: { 'Authorization': 'Bearer ' + token }, body: formData });
     Toast.success('文件上传成功'); Modal.close();
   } catch (err) { Toast.error('上传失败'); }
 }

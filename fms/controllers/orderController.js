@@ -234,8 +234,8 @@ async function createOrder(req, res) {
     res.status(201).json({ code: 201, message: '订单创建成功', data: { id: orderId, order_number: orderNumber } });
   } catch (error) {
     await conn.rollback();
-    console.error('[Order] 创建错误:', error);
-    res.status(500).json({ code: 500, message: '服务器内部错误' });
+    console.error('[Order] 创建错误:', error.message, error.sql || '');
+    res.status(500).json({ code: 500, message: '服务器内部错误: ' + error.message });
   } finally { conn.release(); }
 }
 
@@ -351,7 +351,7 @@ async function deleteOrder(req, res) {
 // 订单文件管理
 // ============================================================
 
-// POST /api/orders/:id/files — 上传文件
+// POST /api/orders/:id/files/:type — 上传文件
 async function uploadFile(req, res) {
   try {
     const orderId = req.params.id;
@@ -360,17 +360,17 @@ async function uploadFile(req, res) {
 
     if (!req.file) return res.status(400).json({ code: 400, message: '请选择文件' });
 
-    const fileType = req.body.file_type || '合同资质';
-    if (!['合同资质', '发货图片'].includes(fileType)) {
-      return res.status(400).json({ code: 400, message: '文件类型无效' });
-    }
+    // 从路由中间件设置的 uploadType 获取文件类型
+    const fileType = req.uploadType || '合同资质';
 
     const filePath = fileType === '合同资质' ? '/uploads/orders/documents/' : '/uploads/orders/shipments/';
 
+    // 修复 Windows 环境下中文文件名编码问题
+    const safeName = Buffer.from(req.file.originalname, 'latin1').toString('utf8');
     await pool.execute(
       `INSERT INTO order_files (order_id, file_type, file_name, file_path, file_size, mime_type, description, uploaded_by)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-      [orderId, fileType, req.file.originalname, filePath + req.file.filename, req.file.size, req.file.mimetype, req.body.description || '', req.user.id]
+      [orderId, fileType, safeName, filePath + req.file.filename, req.file.size, req.file.mimetype, req.body.description || '', req.user.id]
     );
 
     res.json({ code: 200, message: '文件上传成功' });

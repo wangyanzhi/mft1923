@@ -589,8 +589,14 @@ app.use('/api/inventory', require('./routes/inventoryRoutes'));
 // 销售订单路由
 app.use('/api/orders', require('./routes/orderRoutes'));
 
-// 客户路由（基础，完整CRUD在第七阶段）
+// 客户路由
 app.use('/api/customers', require('./routes/customerRoutes'));
+
+// 咨询路由
+app.use('/api/consultations', require('./routes/consultationRoutes'));
+
+// 采购路由
+app.use('/api/purchase', require('./routes/purchaseRoutes'));
 
 // 健康检查
 app.get('/api/health', (req, res) => {
