@@ -393,7 +393,7 @@ table tbody tr:last-child td{border-bottom:none}
 }
 @keyframes slideUp{from{transform:translateY(20px);opacity:0}to{transform:translateY(0);opacity:1}}
 .modal-header{
-  padding:22px 26px 0;display:flex;align-items:center;justify-content:space-between;
+  padding:11px 26px 0;display:flex;align-items:center;justify-content:space-between;
 }
 .modal-header h3{font-size:17px;font-weight:700;letter-spacing:-.2px}
 .modal-close{

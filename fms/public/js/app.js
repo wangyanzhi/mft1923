@@ -442,7 +442,7 @@ async function viewPurchase(id) {
   Modal.open('采购单 — ' + p.order_number, `
     <p>供应商：<strong>${escHtml(p.supplier_name)}</strong> | 状态：<span class="badge">${p.status}</span> | 合计：<strong>¥${Number(p.total_amount).toFixed(2)}</strong></p>
     <p style="font-size:13px;color:var(--color-text-secondary)">日期：${p.order_date||'-'} | 预计到货：${p.expected_date||'-'} | 备注：${escHtml(p.notes||'')}</p>
-    <div class="table-container" style="margin-top:12px"><table><thead><tr><th>产品</th><th>数量</th><th>单价</th><th>小计</th></tr></thead><tbody>${itemsHtml}</tbody></table></div>
+    <div class="table-container" style="margin-top:12px"><table style="width:100%"><thead><tr><th style="width:45%">型号</th><th style="width:15%">数量</th><th style="width:20%">单价</th><th style="width:20%">小计</th></tr></thead><tbody>${itemsHtml}</tbody></table></div>
   `, `${btns}<button class="btn btn-outline" onclick="Modal.close()">关闭</button>`);
 }
 
@@ -593,10 +593,10 @@ async function createOrder() {
       .so-radio label { font-size:12px; color:#475569; cursor:pointer }
       
       /* 产品明细表格 */
-      .so-table-wrapper { margin-top:6px; border:1px solid #E2E8F0; border-radius:8px; overflow:hidden }
+      .so-table-wrapper { margin-top:6px; border:1.5px solid #94A3B8; border-radius:8px; overflow:hidden }
       .so-table { width:100%; border-collapse:collapse }
       .so-table th { background:#F8FAFC; padding:8px 10px; text-align:left; font-size:11px; font-weight:600; color:#64748B; text-transform:uppercase; letter-spacing:.5px }
-      .so-table td { padding:8px 10px; border-top:1px solid #E2E8F0; vertical-align:middle }
+      .so-table td { padding:8px 10px; border-top:1.5px solid #CBD5E1; vertical-align:middle }
       .so-table .item-row:hover { background:#F8FAFC }
       
       .so-item-input { width:100%; height:34px; border:1.5px solid #E2E8F0; border-radius:5px; padding:0 8px; font-size:12px; outline:none; transition:all .2s }
@@ -616,11 +616,11 @@ async function createOrder() {
       .so-total-value { font-size:20px; font-weight:700; color:#059669 }
       
       /* 上传区域 */
-      .so-upload-area { border:2px dashed #CBD5E1; border-radius:8px; padding:14px; text-align:center; cursor:pointer; transition:all .2s; background:#FAFBFC }
+      .so-upload-area { border:2px dashed #CBD5E1; border-radius:8px; padding:10px; text-align:center; cursor:pointer; transition:all .2s; background:#FAFBFC; min-height:60px; display:flex; align-items:center; justify-content:center; gap:8px }
       .so-upload-area:hover { border-color:#3B82F6; background:#EFF6FF }
-      .so-upload-area svg { width:26px; height:26px; color:#94A3B8; margin-bottom:6px }
-      .so-upload-text { font-size:12px; color:#475569; font-weight:500 }
-      .so-upload-hint { font-size:11px; color:#94A3B8; margin-top:3px }
+      .so-upload-area svg { width:20px; height:20px; color:#94A3B8; flex-shrink:0 }
+      .so-upload-text { font-size:11px; color:#475569; font-weight:500 }
+      .so-upload-hint { font-size:10px; color:#94A3B8 }
       
       .so-file-list { margin-top:8px }
       .so-file-item { display:flex; align-items:center; gap:6px; padding:6px 10px; background:#F1F5F9; border-radius:5px; margin-bottom:5px }
@@ -648,19 +648,19 @@ async function createOrder() {
         </div>
       </div>
 
-      <!-- 采购单位、经办人、电话 -->
+      <!-- 采购单位、电话、经办人 -->
       <div class="so-row">
         <div class="so-col-2">
           <label class="so-label required">采购单位</label>
           <select id="ofCustomer" class="so-select">${custOpts}</select>
         </div>
         <div class="so-col">
-          <label class="so-label">经办人</label>
-          <input type="text" id="ofAgent" class="so-input" placeholder="请输入">
-        </div>
-        <div class="so-col">
           <label class="so-label">电话</label>
           <input type="text" id="ofPhone" class="so-input" placeholder="请输入">
+        </div>
+        <div class="so-col">
+          <label class="so-label">经办人</label>
+          <input type="text" id="ofAgent" class="so-input" placeholder="请输入">
         </div>
       </div>
 
@@ -672,12 +672,12 @@ async function createOrder() {
         <table class="so-table">
           <thead>
             <tr>
-              <th style="width:18%">型号</th>
-              <th style="width:22%">批号</th>
+              <th style="width:28%">型号</th>
+              <th style="width:12%">批号</th>
               <th style="width:10%">库存</th>
-              <th style="width:12%">单价</th>
+              <th style="width:10%">单价</th>
               <th style="width:10%">数量</th>
-              <th style="width:12%">小计</th>
+              <th style="width:14%">小计</th>
               <th style="width:6%"></th>
             </tr>
           </thead>
@@ -720,8 +720,8 @@ async function createOrder() {
           <label class="so-label">上传文件</label>
           <div class="so-upload-area" onclick="document.getElementById('ofDocFile').click()">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><polyline points="9 15 12 18 15 15"/></svg>
-            <div class="so-upload-text">点击上传文件</div>
-            <div class="so-upload-hint">支持 PDF、Word、图片</div>
+            <span class="so-upload-text">点击上传文件</span>
+            <span class="so-upload-hint">支持 PDF、Word、图片</span>
           </div>
           <input type="file" id="ofDocFile" style="display:none" accept=".pdf,.doc,.docx,.xls,.xlsx,image/*" multiple onchange="ofAddFiles('doc', this)">
           <div class="so-file-list" id="ofDocList"></div>
@@ -767,7 +767,7 @@ async function createOrder() {
         <div class="so-col" id="ofShipSection" style="display:none">
           <label class="so-upload-area" style="cursor:pointer;display:block" onclick="document.getElementById('ofShipFile').click()">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
-            <div class="so-upload-text">上传抽检图片</div>
+            <span class="so-upload-text">上传抽检图片</span>
           </label>
           <input type="file" id="ofShipFile" style="display:none" accept="image/*" multiple onchange="ofAddFiles('ship', this)">
           <div class="so-file-list" id="ofShipList"></div>
@@ -1050,18 +1050,17 @@ async function viewOrder(id) {
       <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;font-size:13px">
         <div><span style="color:#64748B">客户：</span><strong>${escHtml(o.customer_name)}</strong></div>
         <div><span style="color:#64748B">订单号：</span><strong>${escHtml(o.order_number)}</strong></div>
-        <div><span style="color:#64748B">日期：</span>${o.sales_date||'-'}</div>
+        <div><span style="color:#64748B">日期：</span>${(o.sales_date||'').slice(0,10)||'-'}</div>
         <div><span style="color:#64748B">业务员：</span>${escHtml(o.agent_name||'-')}</div>
         <div><span style="color:#64748B">电话：</span>${escHtml(o.contact_phone||'-')}</div>
         <div><span style="color:#64748B">状态：</span><span class="badge ${badge(o.status,{'已完成':'badge-success','处理中':'badge-info','待处理':'badge-warning','已取消':'badge-default'})}">${o.status}</span></div>
-        <div style="grid-column:1/-1"><span style="color:#64748B">快递：</span><strong>${escHtml(o.express_company||'未指定')}</strong></div>
         <div style="grid-column:1/-1"><span style="color:#64748B">合计：</span><strong style="font-size:18px;color:#3B82F6">¥${Number(o.total_amount).toFixed(2)}</strong></div>
       </div>
     </div>
 
     <div class="of-section"><div class="of-section-title">产品明细</div>
-      <div class="table-container"><table>
-        <thead><tr><th>产品</th><th>批号</th><th>数量</th><th>单价</th><th>小计</th><th>箱号</th></tr></thead>
+      <div class="table-container"><table style="width:100%">
+        <thead><tr><th style="width:35%">型号</th><th style="width:15%">批号</th><th style="width:12%">数量</th><th style="width:12%">单价</th><th style="width:16%">小计</th><th style="width:10%">箱号</th></tr></thead>
         <tbody>${itemsHtml}</tbody></table></div>
     </div>
 
@@ -1112,7 +1111,11 @@ async function viewOrder(id) {
       </div>
     </div>
 
-    ${o.notes ? `<div class="of-section"><div class="of-section-title">备注</div><p style="font-size:13px;white-space:pre-wrap">${escHtml(o.notes)}</p></div>` : ''}
+    ${o.notes || o.express_company ? `<div class="of-section"><div class="of-section-title">备注 / 快递</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;padding:12px 16px;background:#F8FAFC;border-radius:6px;font-size:13px">
+        <div><span style="color:#64748B">备注：</span><span style="white-space:pre-wrap">${escHtml(o.notes||'无')}</span></div>
+        <div><span style="color:#64748B">快递：</span><strong>${escHtml(o.express_company||'未指定')}</strong></div>
+      </div></div>` : ''}
   `, `
     ${btns}
     <button class="btn btn-sm btn-outline" onclick="uploadOrderFile(${o.id})">上传文件</button>
@@ -1129,57 +1132,524 @@ async function deleteOrderFile(orderId, fileId) {
 
 // 编辑订单
 async function editOrder(id) {
-  const [ordRes, custRes] = await Promise.all([
+  const [ordRes, custRes, prodRes] = await Promise.all([
     API.get('/orders/' + id),
     API.get('/customers?limit=200'),
+    API.get('/products?limit=200&status='),
   ]);
   const o = ordRes.data;
   const customers = custRes.data.list || [];
-  const custOpts = customers.map(c => `<option value="${c.id}" ${c.id===o.customer_id?'selected':''}>${escHtml(c.name)}${c.company?' ('+escHtml(c.company)+')':''}</option>`).join('');
+  const products = prodRes.data.list || [];
+  
+  const custOpts = '<option value="">请选择</option>' + customers.map(c => `<option value="${c.id}" ${c.id===o.customer_id?'selected':''}>${escHtml(c.name)}${c.company?' ('+escHtml(c.company)+')':''}</option>`).join('');
+  const prodOpts = '<option value="">选产品</option>' + products.map(p => `<option value="${p.id}">${escHtml(p.model)}</option>`).join('');
 
-  document.getElementById('modalBox').style.width = '760px';
-  Modal.open('编辑订单 — ' + o.order_number, `
-    <div class="of-section"><div class="of-section-title">基本信息</div>
-      <div class="of-grid2">
-        <div class="form-group"><label style="font-size:12px;font-weight:600;color:#475569">客户 *</label><select id="efCustomer" style="height:40px"><option value="">请选择</option>${custOpts}</select></div>
-        <div class="form-group"><label style="font-size:12px;font-weight:600;color:#475569">销售日期</label><input type="date" id="efDate" value="${o.sales_date||''}" style="height:40px"></div>
+  // 构建产品明细行
+  const items = o.items || [];
+  let itemRows = items.map((item, idx) => `
+    <tr class="item-row">
+      <td>
+        <select class="so-item-select ef-prod" data-index="${idx}" onchange="onEfProdChange(this, ${idx})">
+          ${prodOpts.replace(`value="${item.product_id}"`, `value="${item.product_id}" selected`)}
+        </select>
+      </td>
+      <td>
+        <input type="text" class="so-item-input ef-batch" value="${escHtml(item.batch_number||'')}" placeholder="批号">
+      </td>
+      <td><span id="efStock_${idx}" class="stock-warning">${item.stock_quantity||0}</span></td>
+      <td><input type="number" class="so-item-input ef-price" step="0.01" value="${item.unit_price||0}" oninput="updateEfTotal()" placeholder="0.00"></td>
+      <td><input type="number" class="so-item-input ef-qty" step="0.1" min="0.1" value="${item.quantity||1}" oninput="updateEfTotal()" style="text-align:center"></td>
+      <td style="font-weight:600;color:#1E293B" class="ef-subtotal">¥${(parseFloat(item.subtotal)||0).toFixed(2)}</td>
+      <td><button type="button" class="so-delete-btn" onclick="removeEfItem(this)">×</button></td>
+    </tr>`).join('');
+
+  if (!itemRows) {
+    itemRows = `<tr class="item-row">
+      <td>
+        <select class="so-item-select ef-prod" data-index="0" onchange="onEfProdChange(this, 0)">
+          ${prodOpts}
+        </select>
+      </td>
+      <td>
+        <input type="text" class="so-item-input ef-batch" placeholder="批号">
+      </td>
+      <td><span id="efStock_0" class="stock-warning">0</span></td>
+      <td><input type="number" class="so-item-input ef-price" step="0.01" value="0" oninput="updateEfTotal()" placeholder="0.00"></td>
+      <td><input type="number" class="so-item-input ef-qty" step="0.1" min="0.1" value="1" oninput="updateEfTotal()" style="text-align:center"></td>
+      <td style="font-weight:600;color:#1E293B" class="ef-subtotal">¥0.00</td>
+      <td><button type="button" class="so-delete-btn" onclick="removeEfItem(this)">×</button></td>
+    </tr>`;
+  }
+
+  document.getElementById('modalBox').style.width = '860px';
+  Modal.open('', `
+    <style>
+      .so-container { padding: 8px 0; }
+      .so-title { text-align:center; font-size:18px; font-weight:700; color:#1E293B; margin:6px 0 10px; padding-bottom:8px; border-bottom:2px solid #3B82F6 }
+
+      .so-row { display:flex; gap:16px; margin-bottom:10px }
+      .so-col { flex:1 }
+      .so-col-2 { flex:2 }
+      .so-col-3 { flex:3 }
+      .so-col-4 { flex:4 }
+
+      .so-label { display:block; font-size:12px; font-weight:600; color:#475569; margin-bottom:4px; padding-left:2px }
+      .so-label.required::after { content:' *'; color:#EF4444 }
+
+      .so-input, .so-select { width:100%; height:36px; border:1.5px solid #E2E8F0; border-radius:6px; padding:0 10px; font-size:13px; font-family:inherit; background:#fff; outline:none; transition:all .2s }
+      .so-input:focus, .so-select:focus { border-color:#3B82F6; box-shadow:0 0 0 2px rgba(59,130,246,.12) }
+      .so-input::placeholder { color:#94A3B8 }
+
+      /* 开关样式 */
+      .so-switch-group { display:flex; align-items:center; gap:10px }
+      .so-switch { position:relative; width:40px; height:22px; cursor:pointer }
+      .so-switch input { opacity:0; width:0; height:0 }
+      .so-switch-track { position:absolute; top:0; left:0; right:0; bottom:0; background:#CBD5E1; border-radius:11px; transition:all .3s }
+      .so-switch-track::before { position:absolute; content:''; height:16px; width:16px; left:3px; bottom:3px; background:#fff; border-radius:50%; transition:all .3s; box-shadow:0 1px 3px rgba(0,0,0,.1) }
+      .so-switch input:checked + .so-switch-track { background:#10B981 }
+      .so-switch input:checked + .so-switch-track::before { transform:translateX(18px) }
+      .so-switch-label { font-size:12px; color:#64748B }
+
+      /* 单选按钮组 */
+      .so-radio-group { display:flex; align-items:center; gap:12px }
+      .so-radio { display:flex; align-items:center; gap:4px; cursor:pointer }
+      .so-radio input { width:16px; height:16px; accent-color:#3B82F6 }
+      .so-radio label { font-size:12px; color:#475569; cursor:pointer }
+
+      /* 产品明细表格 */
+      .so-table-wrapper { margin-top:6px; border:1.5px solid #94A3B8; border-radius:8px; overflow:hidden }
+      .so-table { width:100%; border-collapse:collapse }
+      .so-table th { background:#F8FAFC; padding:8px 10px; text-align:left; font-size:11px; font-weight:600; color:#64748B; text-transform:uppercase; letter-spacing:.5px }
+      .so-table td { padding:8px 10px; border-top:1.5px solid #CBD5E1; vertical-align:middle }
+      .so-table .item-row:hover { background:#F8FAFC }
+
+      .so-item-input { width:100%; height:34px; border:1.5px solid #E2E8F0; border-radius:5px; padding:0 8px; font-size:12px; outline:none; transition:all .2s }
+      .so-item-input:focus { border-color:#3B82F6 }
+      .so-item-select { width:100%; height:34px; border:1.5px solid #E2E8F0; border-radius:5px; padding:0 8px; font-size:12px; outline:none; background:#fff }
+      .so-item-select:focus { border-color:#3B82F6 }
+
+      .so-delete-btn { width:26px; height:26px; border:none; background:#F1F5F9; border-radius:5px; color:#94A3B8; cursor:pointer; font-size:14px; display:flex; align-items:center; justify-content:center; transition:all .2s }
+      .so-delete-btn:hover { background:#FEE2E2; color:#EF4444 }
+
+      .so-add-btn { margin-top:8px; padding:6px 14px; background:#F8FAFC; border:1px solid #E2E8F0; border-radius:5px; font-size:12px; font-weight:500; color:#64748B; cursor:pointer; transition:all .2s }
+      .so-add-btn:hover { background:#EFF6FF; border-color:#3B82F6; color:#3B82F6 }
+
+      /* 合计栏 */
+      .so-total-bar { display:flex; justify-content:flex-end; align-items:center; margin-top:8px; padding:10px; background:#F0FDF4; border-radius:6px; border:1px solid #BBF7D0 }
+      .so-total-label { font-size:13px; font-weight:500; color:#059669; margin-right:8px }
+      .so-total-value { font-size:20px; font-weight:700; color:#059669 }
+      
+      /* 上传区域 */
+      .so-upload-area { border:2px dashed #CBD5E1; border-radius:8px; padding:10px; text-align:center; cursor:pointer; transition:all .2s; background:#FAFBFC; min-height:60px; display:flex; align-items:center; justify-content:center; gap:8px }
+      .so-upload-area:hover { border-color:#3B82F6; background:#EFF6FF }
+      .so-upload-area svg { width:20px; height:20px; color:#94A3B8; flex-shrink:0 }
+      .so-upload-text { font-size:11px; color:#475569; font-weight:500 }
+      .so-upload-hint { font-size:10px; color:#94A3B8 }
+      
+      .so-file-item { display:flex; align-items:center; gap:6px; padding:6px 10px; background:#F1F5F9; border-radius:5px; margin-bottom:5px }
+      .so-file-name { flex:1; font-size:12px; color:#475569; overflow:hidden; text-overflow:ellipsis; white-space:nowrap }
+      .so-file-size { font-size:11px; color:#94A3B8 }
+      .so-file-remove { color:#EF4444; cursor:pointer; font-size:14px }
+
+      /* 备注 */
+      .so-textarea { width:100%; min-height:60px; border:1.5px solid #E2E8F0; border-radius:6px; padding:10px 12px; font-size:13px; font-family:inherit; resize:vertical; outline:none; transition:all .2s }
+      .so-textarea:focus { border-color:#3B82F6; box-shadow:0 0 0 2px rgba(59,130,246,.12) }
+      .so-textarea::placeholder { color:#94A3B8 }
+
+      /* 库存红色高亮 */
+      .stock-warning { color:#EF4444; font-weight:700 }
+    </style>
+
+    <div class="so-container">
+      <h1 class="so-title">编辑销售单 — ${escHtml(o.order_number)}</h1>
+
+      <!-- 销售日期 -->
+      <div class="so-row">
+        <div class="so-col">
+          <label class="so-label required">销售日期</label>
+          <input type="date" id="efDate" value="${(o.sales_date||'').slice(0,10)}" class="so-input">
+        </div>
       </div>
-      <div class="of-grid3" style="margin-top:14px">
-        <div class="form-group"><label style="font-size:12px;font-weight:600;color:#475569">业务员</label><input type="text" id="efAgent" value="${escHtml(o.agent_name||'')}" style="height:40px"></div>
-        <div class="form-group"><label style="font-size:12px;font-weight:600;color:#475569">联系电话</label><input type="text" id="efPhone" value="${escHtml(o.contact_phone||'')}" style="height:40px"></div>
-        <div class="form-group"><label style="font-size:12px;font-weight:600;color:#475569">快递公司</label><input type="text" id="efExpress" value="${escHtml(o.express_company||'')}" style="height:40px"></div>
+
+      <!-- 采购单位、电话、经办人 -->
+      <div class="so-row">
+        <div class="so-col-2">
+          <label class="so-label required">采购单位</label>
+          <select id="efCustomer" class="so-select">${custOpts}</select>
+        </div>
+        <div class="so-col">
+          <label class="so-label">电话</label>
+          <input type="text" id="efPhone" value="${escHtml(o.contact_phone||'')}" class="so-input" placeholder="请输入">
+        </div>
+        <div class="so-col">
+          <label class="so-label">经办人</label>
+          <input type="text" id="efAgent" value="${escHtml(o.agent_name||'')}" class="so-input" placeholder="请输入">
+        </div>
+      </div>
+
+      <!-- 数据录入标题 -->
+      <div style="font-size:13px;font-weight:600;color:#1E293B;margin:14px 0 8px;padding-left:2px">数据录入:</div>
+
+      <!-- 产品明细表格 -->
+      <div class="so-table-wrapper">
+        <table class="so-table">
+          <thead>
+            <tr>
+              <th style="width:28%">型号</th>
+              <th style="width:12%">批号</th>
+              <th style="width:10%">库存</th>
+              <th style="width:10%">单价</th>
+              <th style="width:10%">数量</th>
+              <th style="width:14%">小计</th>
+              <th style="width:6%"></th>
+            </tr>
+          </thead>
+          <tbody id="efItems">
+            ${itemRows}
+          </tbody>
+        </table>
+      </div>
+
+      <button type="button" class="so-add-btn" onclick="addEfItem()">+ 添加产品</button>
+
+      <div class="so-total-bar">
+        <span class="so-total-label">总计:</span>
+        <span class="so-total-value" id="efTotal">¥${(parseFloat(o.total_amount)||0).toFixed(2)}</span>
+      </div>
+
+      <!-- 备注和上传 -->
+      <div class="so-row" style="margin-top:14px">
+        <div class="so-col-2">
+          <label class="so-label">备注</label>
+          <textarea id="efNotes" class="so-textarea" placeholder="请输入内容">${escHtml(o.notes||'')}</textarea>
+        </div>
+        <div class="so-col">
+          <label class="so-label">上传合同文档</label>
+          <div class="so-upload-area" onclick="document.getElementById('efDocFile').click()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><polyline points="9 15 12 18 15 15"/></svg>
+            <span class="so-upload-text">点击上传文件</span>
+            <span class="so-upload-hint">支持 PDF、Word、图片</span>
+          </div>
+          <input type="file" id="efDocFile" style="display:none" accept=".pdf,.doc,.docx,.xls,.xlsx,image/*" multiple onchange="efAddFiles('doc', this)">
+          <div class="so-file-list" id="efDocList"></div>
+        </div>
+      </div>
+
+      <!-- 订单选项 -->
+      <div style="font-size:13px;font-weight:600;color:#1E293B;margin:14px 0 10px;padding-left:2px">订单选项:</div>
+
+      <!-- 第一行开关 -->
+      <div class="so-row">
+        <div class="so-switch-group">
+          <span class="so-switch-label">托盘:</span>
+          <label class="so-radio"><input type="radio" name="efTray" value="无" ${o.tray_type==='无'?'checked':''}><label>无</label></label>
+          <label class="so-radio"><input type="radio" name="efTray" value="单层" ${o.tray_type==='单层'?'checked':''}><label>单面</label></label>
+          <label class="so-radio"><input type="radio" name="efTray" value="双层" ${o.tray_type==='双层'?'checked':''}><label>双面</label></label>
+        </div>
+        <div class="so-col"></div>
+        <div class="so-switch-group">
+          <span class="so-switch-label">防水:</span>
+          <label class="so-switch"><input type="checkbox" id="efWater" ${o.waterproof==='是'?'checked':''}><span class="so-switch-track"></span></label>
+        </div>
+        <div class="so-switch-group">
+          <span class="so-switch-label">COC:</span>
+          <label class="so-switch"><input type="checkbox" id="efCoc" ${o.coc==='是'?'checked':''}><span class="so-switch-track"></span></label>
+        </div>
+        <div class="so-switch-group">
+          <span class="so-switch-label">送货单:</span>
+          <label class="so-switch"><input type="checkbox" id="efDel" ${o.delivery_note==='是'?'checked':''}><span class="so-switch-track"></span></label>
+        </div>
+        <div class="so-switch-group">
+          <span class="so-switch-label">回单:</span>
+          <label class="so-switch"><input type="checkbox" id="efRet" ${o.return_note==='是'?'checked':''}><span class="so-switch-track"></span></label>
+        </div>
+      </div>
+
+      <!-- 第二行开关 -->
+      <div class="so-row">
+        <div class="so-switch-group">
+          <span class="so-switch-label">抽检:</span>
+          <label class="so-switch"><input type="checkbox" id="efInsp" ${o.inspection==='是'?'checked':''} onchange="document.getElementById('efShipSection').style.display=this.checked?'block':'none'"><span class="so-switch-track"></span></label>
+        </div>
+        <div class="so-col" id="efShipSection" style="display:${o.inspection==='是'?'block':'none'}">
+          <label class="so-upload-area" style="cursor:pointer;display:block" onclick="document.getElementById('efShipFile').click()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+            <span class="so-upload-text">上传抽检图片</span>
+          </label>
+          <input type="file" id="efShipFile" style="display:none" accept="image/*" multiple onchange="efAddFiles('ship', this)">
+          <div class="so-file-list" id="efShipList"></div>
+        </div>
+      </div>
+
+      <!-- 财务信息 -->
+      <div style="font-size:13px;font-weight:600;color:#1E293B;margin:14px 0 10px;padding-left:2px">财务信息:</div>
+
+      <!-- 发票税率和付款条件 -->
+      <div class="so-row">
+        <div class="so-col">
+          <label class="so-label">发票:</label>
+          <div class="so-radio-group">
+            <label class="so-radio"><input type="radio" name="efInvoice" value="无" ${o.invoice_rate==='无'?'checked':''}><label>无</label></label>
+            <label class="so-radio"><input type="radio" name="efInvoice" value="1%" ${o.invoice_rate==='1%'?'checked':''}><label>1%</label></label>
+            <label class="so-radio"><input type="radio" name="efInvoice" value="13%" ${o.invoice_rate==='13%'?'checked':''}><label>13%</label></label>
+          </div>
+        </div>
+        <div class="so-col">
+          <label class="so-label">付款:</label>
+          <div class="so-radio-group">
+            <label class="so-radio"><input type="radio" name="efPayment" value="已付" ${o.payment_terms==='已付'?'checked':''}><label>已付</label></label>
+            <label class="so-radio"><input type="radio" name="efPayment" value="月结30天" ${o.payment_terms==='月结30天'?'checked':''}><label>缓付30天</label></label>
+            <label class="so-radio"><input type="radio" name="efPayment" value="月结90天" ${o.payment_terms==='月结90天'?'checked':''}><label>缓90天</label></label>
+            <label class="so-radio"><input type="radio" name="efPayment" value="手动" ${o.payment_terms==='手动'?'checked':''}><label>手动</label></label>
+          </div>
+        </div>
+        <div class="so-col">
+          <label class="so-label">快递:</label>
+          <input type="text" id="efExpress" value="${escHtml(o.express_company||'')}" class="so-input" placeholder="请输入">
+        </div>
+      </div>
+
+      <!-- 付款方式和付款状态 -->
+      <div class="so-row">
+        <div class="so-col">
+          <label class="so-label">付款方式</label>
+          <input type="text" id="efPayMethod" value="${escHtml(o.payment_method||'')}" class="so-input" placeholder="如：转账 / 现金 / 支票">
+        </div>
+        <div class="so-col">
+          <label class="so-label">付款状态</label>
+          <select id="efPayStatus" class="so-select">
+            <option value="未付款" ${o.payment_status==='未付款'?'selected':''}>未付款</option>
+            <option value="已付款" ${o.payment_status==='已付款'?'selected':''}>已付款</option>
+            <option value="部分付款" ${o.payment_status==='部分付款'?'selected':''}>部分付款</option>
+          </select>
+        </div>
       </div>
     </div>
-    <div class="of-section"><div class="of-section-title">订单选项</div>
-      <div class="of-grid3">
-        <div class="form-group"><label style="font-size:12px;font-weight:600;color:#475569">托盘类型</label><select id="efTray" style="height:40px">${['无','单层','双层'].map(v=>`<option ${o.tray_type===v?'selected':''}>${v}</option>`).join('')}</select></div>
-        <div class="form-group"><label style="font-size:12px;font-weight:600;color:#475569">防水</label><select id="efWater" style="height:40px">${['否','是'].map(v=>`<option ${o.waterproof===v?'selected':''}>${v}</option>`).join('')}</select></div>
-        <div class="form-group"><label style="font-size:12px;font-weight:600;color:#475569">COC</label><select id="efCoc" style="height:40px">${['否','是'].map(v=>`<option ${o.coc===v?'selected':''}>${v}</option>`).join('')}</select></div>
-        <div class="form-group"><label style="font-size:12px;font-weight:600;color:#475569">送货单</label><select id="efDel" style="height:40px">${['否','是'].map(v=>`<option ${o.delivery_note===v?'selected':''}>${v}</option>`).join('')}</select></div>
-        <div class="form-group"><label style="font-size:12px;font-weight:600;color:#475569">退货单</label><select id="efRet" style="height:40px">${['否','是'].map(v=>`<option ${o.return_note===v?'selected':''}>${v}</option>`).join('')}</select></div>
-        <div class="form-group"><label style="font-size:12px;font-weight:600;color:#475569">验货</label><select id="efInsp" style="height:40px">${['否','是'].map(v=>`<option ${o.inspection===v?'selected':''}>${v}</option>`).join('')}</select></div>
-      </div>
-    </div>
-    <div class="of-section"><div class="of-section-title">财务信息</div>
-      <div class="of-grid3">
-        <div class="form-group"><label style="font-size:12px;font-weight:600;color:#475569">发票税率</label><select id="efRate" style="height:40px">${['无','1%','13%'].map(v=>`<option ${o.invoice_rate===v?'selected':''}>${v}</option>`).join('')}</select></div>
-        <div class="form-group"><label style="font-size:12px;font-weight:600;color:#475569">付款条件</label><select id="efTerms" style="height:40px">${['已付','月结30天','月结90天','手动'].map(v=>`<option ${o.payment_terms===v?'selected':''}>${v}</option>`).join('')}</select></div>
-        <div class="form-group"><label style="font-size:12px;font-weight:600;color:#475569">付款状态</label><select id="efPayStatus" style="height:40px">${['未付款','已付款','部分付款'].map(v=>`<option ${o.payment_status===v?'selected':''}>${v}</option>`).join('')}</select></div>
-      </div>
-      <div style="margin-top:14px"><div class="form-group"><label style="font-size:12px;font-weight:600;color:#475569">付款方式</label><input type="text" id="efPayMethod" value="${escHtml(o.payment_method||'')}" style="height:40px;max-width:300px"></div></div>
-    </div>
-    <div class="of-section"><div class="of-section-title">备注</div>
-      <textarea id="efNotes" rows="2" style="width:100%;border:1.5px solid #E2E8F0;border-radius:8px;padding:10px 14px;font-size:13px;font-family:inherit;outline:none;min-height:60px">${escHtml(o.notes||'')}</textarea>
-    </div>
-    <p style="font-size:12px;color:#94A3B8;margin-top:8px">* 产品明细和附件请在订单详情中管理，编辑仅修改订单基本信息和选项</p>
   `, `
     <button class="btn btn-outline" onclick="Modal.close()">取消</button>
-    <button class="btn btn-primary" onclick="execEditOrder(${o.id})">保存修改</button>
+    <button class="btn btn-primary btn-lg" onclick="execEditOrder(${o.id})">保存修改</button>
   `);
+
+  window._efProds = products;
+  
+  // 加载已有附件
+  try {
+    const filesRes = await API.get('/orders/' + o.id + '/files');
+    window._efDocFiles = (filesRes.data || []).filter(f => f.file_type === '合同资质');
+    window._efShipFiles = (filesRes.data || []).filter(f => f.file_type === '发货图片');
+  } catch (_) {
+    window._efDocFiles = [];
+    window._efShipFiles = [];
+  }
+  window._efCurrentOrderId = o.id;
+  window._efPendingDocFiles = [];
+  window._efPendingShipFiles = [];
+  renderEfDocList();
+  renderEfShipList();
+}
+
+// 编辑订单产品变更处理
+async function onEfProdChange(select, index) {
+  const prodId = parseInt(select.value);
+  if (!prodId) {
+    document.getElementById('efStock_' + index).textContent = '0';
+    return;
+  }
+  
+  const prod = window._efProds.find(p => p.id === prodId);
+  if (prod) {
+    try {
+      const res = await API.get('/inventory/batch-numbers/' + prodId);
+      const batches = res.data || [];
+      const totalStock = batches.reduce((sum, b) => sum + parseFloat(b.quantity || 0), 0);
+      document.getElementById('efStock_' + index).textContent = totalStock.toFixed(1);
+    } catch (_) {
+      document.getElementById('efStock_' + index).textContent = '0';
+    }
+  }
+}
+
+// 添加编辑订单产品项
+function addEfItem() {
+  const container = document.getElementById('efItems');
+  const rows = container.querySelectorAll('.item-row');
+  const newIndex = rows.length;
+  
+  const prodOpts = window._efProds ? 
+    '<option value="">选产品</option>' + window._efProds.map(p => `<option value="${p.id}">${escHtml(p.model)}</option>`).join('') :
+    '<option value="">选产品</option>';
+  
+  const newRow = container.insertRow();
+  newRow.className = 'item-row';
+  newRow.innerHTML = `
+    <td><select class="so-item-select ef-prod" data-index="${newIndex}" onchange="onEfProdChange(this, ${newIndex})">${prodOpts}</select></td>
+    <td><input type="text" class="so-item-input ef-batch" placeholder="批号"></td>
+    <td><span id="efStock_${newIndex}" class="stock-warning">0</span></td>
+    <td><input type="number" class="so-item-input ef-price" step="0.01" value="0" oninput="updateEfTotal()" placeholder="0.00"></td>
+    <td><input type="number" class="so-item-input ef-qty" step="0.1" min="0.1" value="1" oninput="updateEfTotal()" style="text-align:center"></td>
+    <td style="font-weight:600;color:#1E293B" class="ef-subtotal">¥0.00</td>
+    <td><button type="button" class="so-delete-btn" onclick="removeEfItem(this)">×</button></td>
+  `;
+  
+  updateEfTotal();
+}
+
+// 删除编辑订单产品项
+function removeEfItem(btn) {
+  const row = btn.closest('.item-row');
+  const container = document.getElementById('efItems');
+  if (container.querySelectorAll('.item-row').length > 1) {
+    row.remove();
+    updateEfTotal();
+  }
+}
+
+// 更新编辑订单总计
+function updateEfTotal() {
+  let total = 0;
+  document.querySelectorAll('.ef-subtotal').forEach((el, idx) => {
+    const priceEl = document.querySelectorAll('.ef-price')[idx];
+    const qtyEl = document.querySelectorAll('.ef-qty')[idx];
+    const price = parseFloat(priceEl.value) || 0;
+    const qty = parseFloat(qtyEl.value) || 0;
+    const subtotal = price * qty;
+    el.textContent = '¥' + subtotal.toFixed(2);
+    total += subtotal;
+  });
+  document.getElementById('efTotal').textContent = '¥' + total.toFixed(2);
+}
+
+// 编辑订单添加文件
+function efAddFiles(type, input) {
+  const listEl = document.getElementById(type === 'doc' ? 'efDocList' : 'efShipList');
+  const files = Array.from(input.files);
+  if (type === 'doc') {
+    if (!window._efPendingDocFiles) window._efPendingDocFiles = [];
+    window._efPendingDocFiles.push(...files);
+    renderEfDocList();
+  } else {
+    if (!window._efPendingShipFiles) window._efPendingShipFiles = [];
+    window._efPendingShipFiles.push(...files);
+    renderEfShipList();
+  }
+  input.value = '';
+}
+
+// 删除待上传文件
+function efRemovePendingFile(type, index) {
+  if (type === 'doc') {
+    window._efPendingDocFiles.splice(index, 1);
+    renderEfDocList();
+  } else {
+    window._efPendingShipFiles.splice(index, 1);
+    renderEfShipList();
+  }
+}
+
+// 删除已有附件
+function efDeleteExistingFile(fileId, type) {
+  if (!confirm('确定要删除此附件吗？')) return;
+  const orderId = window._efCurrentOrderId || document.querySelector('#efDocFile') ? parseInt(window.location.pathname.split('/').pop()) : 0;
+  API.delete(`/orders/${orderId}/files/${fileId}`).then(() => {
+    if (type === 'doc') {
+      window._efDocFiles = window._efDocFiles.filter(f => f.id !== fileId);
+      renderEfDocList();
+    } else {
+      window._efShipFiles = window._efShipFiles.filter(f => f.id !== fileId);
+      renderEfShipList();
+    }
+    Toast.success('文件已删除');
+  }).catch(err => Toast.error('删除失败: ' + err.message));
+}
+
+// 渲染合同文档列表
+function renderEfDocList() {
+  const listEl = document.getElementById('efDocList');
+  if (!listEl) return;
+  let html = '';
+  
+  // 已有文件
+  if (window._efDocFiles) {
+    window._efDocFiles.forEach(f => {
+      html += `<div class="so-file-item">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="#94A3B8" stroke-width="2" style="flex-shrink:0"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+        <a href="${f.file_path}" target="_blank" class="so-file-name" style="color:#3B82F6;text-decoration:none">${escHtml(f.file_name)}</a>
+        <span class="so-file-size">${(f.file_size/1024).toFixed(1)}KB</span>
+        <span class="so-file-remove" onclick="efDeleteExistingFile(${f.id}, 'doc')">&times;</span>
+      </div>`;
+    });
+  }
+  
+  // 新增待上传
+  if (window._efPendingDocFiles) {
+    window._efPendingDocFiles.forEach((f, i) => {
+      html += `<div class="so-file-item">
+        <span class="so-file-name">${escHtml(f.name)}</span>
+        <span class="so-file-size">${(f.size/1024).toFixed(1)}KB</span>
+        <span class="so-file-remove" onclick="efRemovePendingFile('doc', ${i})">&times;</span>
+      </div>`;
+    });
+  }
+  
+  listEl.innerHTML = html;
+}
+
+// 渲染抽检图片列表
+function renderEfShipList() {
+  const listEl = document.getElementById('efShipList');
+  if (!listEl) return;
+  let html = '';
+  
+  // 已有文件
+  if (window._efShipFiles) {
+    window._efShipFiles.forEach(f => {
+      html += `<div class="so-file-item">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="#94A3B8" stroke-width="2" style="flex-shrink:0"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+        <a href="${f.file_path}" target="_blank" class="so-file-name" style="color:#3B82F6;text-decoration:none">${escHtml(f.file_name)}</a>
+        <span class="so-file-size">${(f.file_size/1024).toFixed(1)}KB</span>
+        <span class="so-file-remove" onclick="efDeleteExistingFile(${f.id}, 'ship')">&times;</span>
+      </div>`;
+    });
+  }
+  
+  // 新增待上传
+  if (window._efPendingShipFiles) {
+    window._efPendingShipFiles.forEach((f, i) => {
+      html += `<div class="so-file-item">
+        <span class="so-file-name">${escHtml(f.name)}</span>
+        <span class="so-file-size">${(f.size/1024).toFixed(1)}KB</span>
+        <span class="so-file-remove" onclick="efRemovePendingFile('ship', ${i})">&times;</span>
+      </div>`;
+    });
+  }
+  
+  listEl.innerHTML = html;
 }
 
 async function execEditOrder(id) {
   try {
+    // 收集产品明细
+    const items = [];
+    document.querySelectorAll('.item-row').forEach((row, idx) => {
+      const prodEl = row.querySelector('.ef-prod');
+      const batchEl = row.querySelector('.ef-batch');
+      const priceEl = row.querySelector('.ef-price');
+      const qtyEl = row.querySelector('.ef-qty');
+      
+      if (prodEl.value) {
+        items.push({
+          product_id: parseInt(prodEl.value),
+          batch_number: batchEl.value.trim(),
+          unit_price: parseFloat(priceEl.value) || 0,
+          quantity: parseFloat(qtyEl.value) || 0,
+        });
+      }
+    });
+
+    const trayEl = document.querySelector('input[name="efTray"]:checked');
+    const invoiceEl = document.querySelector('input[name="efInvoice"]:checked');
+    const paymentEl = document.querySelector('input[name="efPayment"]:checked');
+    
     const body = {
       customer_id: parseInt(document.getElementById('efCustomer').value),
       sales_date: document.getElementById('efDate').value,
@@ -1188,18 +1658,52 @@ async function execEditOrder(id) {
       express_company: document.getElementById('efExpress').value.trim(),
       payment_method: document.getElementById('efPayMethod').value.trim(),
       payment_status: document.getElementById('efPayStatus').value,
-      tray_type: document.getElementById('efTray').value,
-      waterproof: document.getElementById('efWater').value,
-      coc: document.getElementById('efCoc').value,
-      delivery_note: document.getElementById('efDel').value,
-      return_note: document.getElementById('efRet').value,
-      inspection: document.getElementById('efInsp').value,
-      invoice_rate: document.getElementById('efRate').value,
-      payment_terms: document.getElementById('efTerms').value,
+      tray_type: trayEl ? trayEl.value : '无',
+      waterproof: document.getElementById('efWater').checked ? '是' : '否',
+      coc: document.getElementById('efCoc').checked ? '是' : '否',
+      delivery_note: document.getElementById('efDel').checked ? '是' : '否',
+      return_note: document.getElementById('efRet').checked ? '是' : '否',
+      inspection: document.getElementById('efInsp').checked ? '是' : '否',
+      invoice_rate: invoiceEl ? invoiceEl.value : '无',
+      payment_terms: paymentEl ? paymentEl.value : '已付',
       notes: document.getElementById('efNotes').value,
+      items: items,
     };
+    
     if (!body.customer_id) { Toast.warning('请选择客户'); return; }
+    if (items.length === 0) { Toast.warning('请至少添加一个产品'); return; }
+    
     await API.put('/orders/' + id, body);
+    
+    // 上传新附件
+    const token = Auth.getToken();
+    
+    // 上传合同文档
+    if (window._efPendingDocFiles && window._efPendingDocFiles.length > 0) {
+      for (const f of window._efPendingDocFiles) {
+        const formData = new FormData();
+        formData.append('file', f);
+        await fetch('/api/orders/' + id + '/files/document', {
+          method: 'POST',
+          headers: { 'Authorization': 'Bearer ' + token },
+          body: formData
+        });
+      }
+    }
+    
+    // 上传抽检图片
+    if (window._efPendingShipFiles && window._efPendingShipFiles.length > 0) {
+      for (const f of window._efPendingShipFiles) {
+        const formData = new FormData();
+        formData.append('file', f);
+        await fetch('/api/orders/' + id + '/files/shipment', {
+          method: 'POST',
+          headers: { 'Authorization': 'Bearer ' + token },
+          body: formData
+        });
+      }
+    }
+    
     Toast.success('订单更新成功');
     Modal.close();
     loadOrdList(document.getElementById('contentArea'), ordPage, ordSearch, ordStatus, ordPayStatus);
@@ -1648,7 +2152,7 @@ async function viewSio(id) {
 
   Modal.open('入库单详情 — ' + s.order_number, `
     <p>状态: <span class="badge ${s.status==='草稿'?'badge-warning':s.status==='已审批'?'badge-success':'badge-default'}">${s.status}</span> | 操作人: ${escHtml(s.operator_name||'')} | 备注: ${escHtml(s.notes||'')}</p>
-    <div class="table-container" style="margin-top:12px"><table><thead><tr><th>产品</th><th>批号</th><th>数量</th><th>单价</th><th>箱号</th></tr></thead><tbody>${itemsHtml}</tbody></table></div>
+    <div class="table-container" style="margin-top:12px"><table style="width:100%"><thead><tr><th style="width:38%">型号</th><th style="width:18%">批号</th><th style="width:14%">数量</th><th style="width:15%">单价</th><th style="width:15%">箱号</th></tr></thead><tbody>${itemsHtml}</tbody></table></div>
   `, `<button class="btn btn-outline" onclick="Modal.close()">关闭</button>`);
 }
 

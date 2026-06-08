@@ -29,15 +29,15 @@ app.use(cors({
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-// 全局限流
-const globalLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 分钟
-  max: 500,
-  message: { code: 429, message: '请求过于频繁，请稍后再试' },
-  standardHeaders: true,
-  legacyHeaders: false,
-});
-app.use('/api/', globalLimiter);
+// 全局限流（已临时禁用）
+// const globalLimiter = rateLimit({
+//   windowMs: 15 * 60 * 1000, // 15 分钟
+//   max: 500,
+//   message: { code: 429, message: '请求过于频繁，请稍后再试' },
+//   standardHeaders: true,
+//   legacyHeaders: false,
+// });
+// app.use('/api/', globalLimiter);
 
 // 静态文件服务
 app.use(express.static(path.join(__dirname, 'public')));

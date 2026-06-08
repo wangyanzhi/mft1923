@@ -371,11 +371,12 @@ async function getStockInOrder(req, res) {
 async function approveStockInOrder(req, res) {
   const conn = await pool.getConnection();
   try {
-    const [orders] = await conn.execute('SELECT * FROM stock_in_orders WHERE id = ?', [req.params.id]);
+    const orderId = parseInt(req.params.id);
+    const [orders] = await conn.execute('SELECT * FROM stock_in_orders WHERE id = ?', [orderId]);
     if (orders.length === 0) { conn.release(); return res.status(404).json({ code: 404, message: '入库单不存在' }); }
     if (orders[0].status !== '草稿') { conn.release(); return res.status(400).json({ code: 400, message: '仅草稿状态可审批' }); }
 
-    const [items] = await conn.execute('SELECT * FROM stock_in_order_items WHERE stock_in_order_id = ?', [req.params.id]);
+    const [items] = await conn.execute('SELECT * FROM stock_in_order_items WHERE stock_in_order_id = ?', [orderId]);
 
     await conn.beginTransaction();
 
@@ -386,23 +387,26 @@ async function approveStockInOrder(req, res) {
         if (bins.length === 0 || bins[0].status !== '启用') { await conn.rollback(); conn.release(); return res.status(400).json({ code: 400, message: `箱号不可用（明细ID: ${item.id}）` }); }
       }
 
+      // 安全库存默认值
+      const minStock = 10;
+
       const [existing] = await conn.execute(
         'SELECT id, quantity FROM inventory WHERE product_id = ? AND batch_number = ? FOR UPDATE',
         [item.product_id, item.batch_number]
       );
 
-      const qtyBefore = existing.length > 0 ? existing[0].quantity : 0;
+      const qtyBefore = existing.length > 0 ? parseFloat(existing[0].quantity) : 0;
       const qtyAfter = qtyBefore + parseFloat(item.quantity);
 
       let inventoryId;
       if (existing.length > 0) {
         inventoryId = existing[0].id;
         await conn.execute('UPDATE inventory SET quantity = ?, unit_price = ?, bin_id = COALESCE(?, bin_id), last_updated_at = NOW() WHERE id = ?',
-          [qtyAfter, item.unit_price, item.bin_id || null, inventoryId]);
+          [qtyAfter, parseFloat(item.unit_price), item.bin_id || null, inventoryId]);
       } else {
         const [result] = await conn.execute(
-          'INSERT INTO inventory (product_id, batch_number, bin_id, quantity, unit_price) VALUES (?, ?, ?, ?, ?)',
-          [item.product_id, item.batch_number, item.bin_id || null, item.quantity, item.unit_price]
+          'INSERT INTO inventory (product_id, batch_number, bin_id, quantity, unit_price, min_stock) VALUES (?, ?, ?, ?, ?, ?)',
+          [item.product_id, item.batch_number, item.bin_id || null, parseFloat(item.quantity), parseFloat(item.unit_price), minStock]
         );
         inventoryId = result.insertId;
       }
@@ -410,14 +414,14 @@ async function approveStockInOrder(req, res) {
       await conn.execute(
         `INSERT INTO inventory_history (inventory_id, product_id, batch_number, change_type, quantity_before, quantity_change, quantity_after, reference_type, reference_id, created_by)
          VALUES (?, ?, ?, '入库审批', ?, ?, ?, 'stock_in_order', ?, ?)`,
-        [inventoryId, item.product_id, item.batch_number, qtyBefore, item.quantity, qtyAfter, req.params.id, req.user.id]
+        [inventoryId, item.product_id, item.batch_number, qtyBefore, parseFloat(item.quantity), qtyAfter, orderId, req.user.id]
       );
     }
 
-    await conn.execute("UPDATE stock_in_orders SET status = '已审批', updated_at = NOW() WHERE id = ?", [req.params.id]);
+    await conn.execute("UPDATE stock_in_orders SET status = '已审批', updated_at = NOW() WHERE id = ?", [orderId]);
     await conn.commit();
 
-    await logOperation({ user_id: req.user.id, action: '审批入库单', target_type: 'stock_in_order', target_id: parseInt(req.params.id), details: { items_count: items.length }, ip_address: req.ip, user_agent: req.headers['user-agent'] });
+    await logOperation({ user_id: req.user.id, action: '审批入库单', target_type: 'stock_in_order', target_id: orderId, details: { items_count: items.length }, ip_address: req.ip, user_agent: req.headers['user-agent'] });
 
     res.json({ code: 200, message: '入库单审批通过，库存已更新' });
   } catch (error) {
