@@ -158,8 +158,8 @@ async function stockIn(req, res) {
     );
 
     let inventoryId;
-    const qtyBefore = existing.length > 0 ? existing[0].quantity : 0;
-    const qtyAfter = qtyBefore + parseFloat(quantity);
+    const qtyBefore = existing.length > 0 ? parseFloat(existing[0].quantity) : 0;
+    const qtyAfter = Math.round((qtyBefore + parseFloat(quantity)) * 10) / 10;
 
     if (existing.length > 0) {
       inventoryId = existing[0].id;
@@ -179,7 +179,7 @@ async function stockIn(req, res) {
     await conn.execute(
       `INSERT INTO inventory_history (inventory_id, product_id, batch_number, change_type, quantity_before, quantity_change, quantity_after, reference_type, notes, created_by)
        VALUES (?, ?, ?, '入库', ?, ?, ?, 'manual', ?, ?)`,
-      [inventoryId, product_id, batch_number, qtyBefore, quantity, qtyAfter, '手动入库', req.user.id]
+      [inventoryId, product_id, batch_number, qtyBefore, parseFloat(quantity), qtyAfter, '手动入库', req.user.id]
     );
 
     await conn.commit();
@@ -216,7 +216,7 @@ async function stockOut(req, res) {
     }
 
     const qtyBefore = existing[0].quantity;
-    const qtyAfter = qtyBefore - parseFloat(quantity);
+    const qtyAfter = Math.round((qtyBefore - parseFloat(quantity)) * 10) / 10;
     if (qtyAfter < 0) {
       await conn.rollback(); conn.release();
       return res.status(400).json({ code: 400, message: `库存不足（当前: ${qtyBefore}，需要: ${quantity}）` });
@@ -257,7 +257,7 @@ async function stockAdjust(req, res) {
     if (existing.length === 0) { await conn.rollback(); conn.release(); return res.status(404).json({ code: 404, message: '库存记录不存在' }); }
 
     const qtyBefore = existing[0].quantity;
-    const change = parseFloat(new_quantity) - qtyBefore;
+    const change = Math.round((parseFloat(new_quantity) - qtyBefore) * 10) / 10;
 
     await conn.execute('UPDATE inventory SET quantity = ?, last_updated_at = NOW() WHERE id = ?', [new_quantity, inventory_id]);
     await conn.execute(
@@ -327,7 +327,8 @@ async function listStockInOrders(req, res) {
 
     const [rows] = await pool.execute(
       `SELECT s.*, u.name AS operator_name,
-              (SELECT COUNT(*) FROM stock_in_order_items WHERE stock_in_order_id = s.id) AS item_count
+              (SELECT COUNT(*) FROM stock_in_order_items WHERE stock_in_order_id = s.id) AS item_count,
+              (SELECT COALESCE(SUM(quantity), 0) FROM stock_in_order_items WHERE stock_in_order_id = s.id) AS total_quantity
        FROM stock_in_orders s
        LEFT JOIN users u ON s.user_id = u.id
        ${where}
@@ -396,7 +397,7 @@ async function approveStockInOrder(req, res) {
       );
 
       const qtyBefore = existing.length > 0 ? parseFloat(existing[0].quantity) : 0;
-      const qtyAfter = qtyBefore + parseFloat(item.quantity);
+      const qtyAfter = Math.round((qtyBefore + parseFloat(item.quantity)) * 10) / 10;
 
       let inventoryId;
       if (existing.length > 0) {

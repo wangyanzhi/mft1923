@@ -95,7 +95,6 @@ async function salesStats(req, res) {
        FROM orders o WHERE o.status != '已取消' AND ${dateCondition}`, params
     );
 
-    // 按月统计
     const [monthly] = await pool.execute(
       `SELECT MONTH(o.sales_date) AS m, COALESCE(SUM(o.total_amount), 0) AS amount, COUNT(*) AS cnt
        FROM orders o WHERE o.status != '已取消' AND YEAR(o.sales_date) = ?
@@ -157,7 +156,6 @@ async function createOrder(req, res) {
 
     await conn.beginTransaction();
 
-    // 验证并扣减库存
     let totalAmount = 0;
     const orderItems = [];
 
@@ -166,7 +164,11 @@ async function createOrder(req, res) {
         await conn.rollback(); conn.release();
         return res.status(400).json({ code: 400, message: '产品、批次和数量（≥0.1）为必填项' }); }
 
-      // 锁定库存行
+      const unitPrice = parseFloat(item.unit_price) || 0;
+      if (unitPrice < 0) {
+        await conn.rollback(); conn.release();
+        return res.status(400).json({ code: 400, message: '单价不能为负数' }); }
+
       const [invRows] = await conn.execute(
         'SELECT id, product_id, batch_number, quantity, bin_id FROM inventory WHERE id = ? FOR UPDATE',
         [item.inventory_id]
@@ -181,15 +183,12 @@ async function createOrder(req, res) {
         await conn.rollback(); conn.release();
         return res.status(400).json({ code: 400, message: `库存不足：${inv.batch_number} 当前库存 ${inv.quantity}，需要 ${item.quantity}` }); }
 
-      const unitPrice = item.unit_price || 0;
-      const subtotal = parseFloat(item.quantity) * parseFloat(unitPrice);
+      const subtotal = parseFloat(item.quantity) * unitPrice;
       totalAmount += subtotal;
 
-      // 扣减库存
       const newQty = inv.quantity - parseFloat(item.quantity);
       await conn.execute('UPDATE inventory SET quantity = ?, last_updated_at = NOW() WHERE id = ?', [newQty, inv.id]);
 
-      // 记录库存变动历史
       await conn.execute(
         `INSERT INTO inventory_history (inventory_id, product_id, batch_number, change_type, quantity_before, quantity_change, quantity_after, reference_type, reference_id, created_by)
          VALUES (?, ?, ?, '订单创建', ?, ?, ?, 'order', 0, ?)`,
@@ -199,7 +198,6 @@ async function createOrder(req, res) {
       orderItems.push({ product_id: item.product_id, inventory_id: inv.id, quantity: item.quantity, unit_price: unitPrice, subtotal });
     }
 
-    // 创建订单
     const orderNumber = generateOrderNumber();
     const [result] = await conn.execute(
       `INSERT INTO orders (order_number, customer_id, user_id, sales_date, agent_name, contact_phone,
@@ -214,13 +212,11 @@ async function createOrder(req, res) {
     );
     const orderId = result.insertId;
 
-    // 插入订单明细（关联 inventory_id）
     for (const oi of orderItems) {
       await conn.execute(
         'INSERT INTO order_items (order_id, product_id, inventory_id, quantity, unit_price, subtotal) VALUES (?, ?, ?, ?, ?, ?)',
         [orderId, oi.product_id, oi.inventory_id, oi.quantity, oi.unit_price, oi.subtotal]
       );
-      // 更新库存历史中的 reference_id
       await conn.execute(
         "UPDATE inventory_history SET reference_id = ? WHERE reference_type = 'order' AND reference_id = 0 AND inventory_id = ? AND created_by = ? ORDER BY id DESC LIMIT 1",
         [orderId, oi.inventory_id, req.user.id]
@@ -259,7 +255,6 @@ async function updateStatus(req, res) {
       conn.release();
       return res.status(400).json({ code: 400, message: `不能从"${orders[0].status}"变更为"${status}"` }); }
 
-    // 取消订单：恢复库存
     if (status === '已取消' && orders[0].status !== '已取消') {
       await conn.beginTransaction();
 
@@ -292,28 +287,127 @@ async function updateStatus(req, res) {
   } finally { conn.release(); }
 }
 
-// PUT /api/orders/:id — 更新订单基本信息（不涉及库存）
+// PUT /api/orders/:id — 更新订单基本信息 + 产品明细（含库存调整）
 async function updateOrder(req, res) {
+  const conn = await pool.getConnection();
   try {
-    const fields = [], params = [];
-    const allowed = ['agent_name', 'contact_phone', 'tray_type', 'waterproof', 'coc', 'delivery_note',
-                     'return_note', 'inspection', 'invoice_rate', 'payment_terms', 'payment_term_manual',
-                     'payment_method', 'payment_status', 'express_company', 'notes', 'sales_date'];
+    const orderId = parseInt(req.params.id);
+    const [orders] = await conn.execute('SELECT * FROM orders WHERE id = ?', [orderId]);
+    if (orders.length === 0) { conn.release(); return res.status(404).json({ code: 404, message: '订单不存在' }); }
 
+    const { customer_id, sales_date, agent_name, contact_phone, items,
+            tray_type, waterproof, coc, delivery_note, return_note, inspection,
+            invoice_rate, payment_terms, payment_term_manual, payment_method,
+            payment_status, express_company, notes } = req.body;
+
+    console.log('[Order Update] orderId:', orderId, '| items:', JSON.stringify(items));
+
+    await conn.beginTransaction();
+
+    // 更新订单主表
+    const fields = [], params = [];
+    const allowed = ['customer_id', 'sales_date', 'agent_name', 'contact_phone',
+                     'tray_type', 'waterproof', 'coc', 'delivery_note', 'return_note',
+                     'inspection', 'invoice_rate', 'payment_terms', 'payment_term_manual',
+                     'payment_method', 'payment_status', 'express_company', 'notes'];
     for (const key of allowed) {
       if (req.body[key] !== undefined) { fields.push(`${key} = ?`); params.push(req.body[key]); }
     }
+    if (fields.length > 0) {
+      params.push(orderId);
+      await conn.execute(`UPDATE orders SET ${fields.join(', ')}, updated_at = NOW() WHERE id = ?`, params);
+    }
 
-    if (fields.length === 0) return res.status(400).json({ code: 400, message: '没有要更新的字段' });
+    // 处理产品明细
+    if (items && Array.isArray(items)) {
+      // 1. 获取原有明细
+      const [oldItems] = await conn.execute('SELECT * FROM order_items WHERE order_id = ?', [orderId]);
+      console.log('[Order Update] oldItems count:', oldItems.length);
 
-    params.push(req.params.id);
-    await pool.execute(`UPDATE orders SET ${fields.join(', ')}, updated_at = NOW() WHERE id = ?`, params);
+      // 2. 先恢复所有原明细的库存
+      for (const oi of oldItems) {
+        const [invRows] = await conn.execute('SELECT id, quantity FROM inventory WHERE id = ? FOR UPDATE', [oi.inventory_id]);
+        if (invRows.length > 0) {
+          await conn.execute('UPDATE inventory SET quantity = quantity + ?, last_updated_at = NOW() WHERE id = ?', [oi.quantity, oi.inventory_id]);
+        }
+      }
 
+      // 3. 删除原有明细
+      await conn.execute('DELETE FROM order_items WHERE order_id = ?', [orderId]);
+
+      // 4. 插入新明细
+      let totalAmount = 0;
+      const newItems = [];
+      for (const item of items) {
+        if (!item.product_id || !item.inventory_id) {
+          await conn.rollback(); conn.release();
+          return res.status(400).json({ code: 400, message: '产品和批次为必填项' });
+        }
+
+        if (parseFloat(item.quantity) < 0.1) {
+          await conn.rollback(); conn.release();
+          return res.status(400).json({ code: 400, message: '数量（≥0.1）为必填项' });
+        }
+
+        const unitPrice = parseFloat(item.unit_price) || 0;
+        if (unitPrice < 0) {
+          await conn.rollback(); conn.release();
+          return res.status(400).json({ code: 400, message: '单价不能为负数' });
+        }
+
+        const [invRows] = await conn.execute(
+          'SELECT id, product_id, batch_number, quantity FROM inventory WHERE id = ? FOR UPDATE',
+          [item.inventory_id]
+        );
+        if (invRows.length === 0) {
+          await conn.rollback(); conn.release();
+          return res.status(400).json({ code: 400, message: `库存批次不存在（ID: ${item.inventory_id}）` });
+        }
+
+        const inv = invRows[0];
+        if (inv.quantity < parseFloat(item.quantity)) {
+          await conn.rollback(); conn.release();
+          return res.status(400).json({ code: 400, message: `库存不足：${inv.batch_number} 当前库存 ${inv.quantity}，需要 ${item.quantity}` });
+        }
+
+        const subtotal = parseFloat(item.quantity) * unitPrice;
+        totalAmount += subtotal;
+
+        const newQty = inv.quantity - parseFloat(item.quantity);
+        await conn.execute('UPDATE inventory SET quantity = ?, last_updated_at = NOW() WHERE id = ?', [newQty, inv.id]);
+        await conn.execute(
+          `INSERT INTO inventory_history (inventory_id, product_id, batch_number, change_type, quantity_before, quantity_change, quantity_after, reference_type, reference_id, created_by)
+           VALUES (?, ?, ?, '订单编辑', ?, ?, ?, 'order', ?, ?)`,
+          [inv.id, inv.product_id, inv.batch_number, inv.quantity, -parseFloat(item.quantity), newQty, orderId, req.user.id]
+        );
+
+        newItems.push({ product_id: item.product_id, inventory_id: inv.id, quantity: item.quantity, unit_price: unitPrice, subtotal });
+      }
+
+      // 插入新订单明细
+      for (const oi of newItems) {
+        await conn.execute(
+          'INSERT INTO order_items (order_id, product_id, inventory_id, quantity, unit_price, subtotal) VALUES (?, ?, ?, ?, ?, ?)',
+          [orderId, oi.product_id, oi.inventory_id, oi.quantity, oi.unit_price, oi.subtotal]
+        );
+      }
+      console.log('[Order Update] inserted items:', newItems.length);
+
+      // 更新总金额
+      if (totalAmount > 0) {
+        await conn.execute('UPDATE orders SET total_amount = ?, updated_at = NOW() WHERE id = ?', [totalAmount, orderId]);
+      }
+    }
+
+    await conn.commit();
+
+    await logOperation({ user_id: req.user.id, action: '编辑订单', target_type: 'order', target_id: orderId, ip_address: req.ip, user_agent: req.headers['user-agent'] });
     res.json({ code: 200, message: '订单更新成功' });
   } catch (error) {
-    console.error('[Order] 更新错误:', error);
-    res.status(500).json({ code: 500, message: '服务器内部错误' });
-  }
+    await conn.rollback();
+    console.error('[Order] 更新错误:', error.message, error.sql || '');
+    res.status(500).json({ code: 500, message: '服务器内部错误: ' + error.message });
+  } finally { conn.release(); }
 }
 
 // DELETE /api/orders/:id — 删除订单（仅待处理）
@@ -323,13 +417,11 @@ async function deleteOrder(req, res) {
     if (orders.length === 0) return res.status(404).json({ code: 404, message: '订单不存在' });
     if (orders[0].status !== '待处理') return res.status(400).json({ code: 400, message: '仅待处理状态的订单可删除' });
 
-    // 恢复库存
     const [items] = await pool.execute('SELECT * FROM order_items WHERE order_id = ?', [req.params.id]);
     for (const item of items) {
       await pool.execute('UPDATE inventory SET quantity = quantity + ?, last_updated_at = NOW() WHERE id = ?', [item.quantity, item.inventory_id]);
     }
 
-    // 删除附件文件
     const [files] = await pool.execute('SELECT * FROM order_files WHERE order_id = ?', [req.params.id]);
     for (const f of files) {
       const fp = path.join(__dirname, '..', f.file_path);
@@ -360,12 +452,9 @@ async function uploadFile(req, res) {
 
     if (!req.file) return res.status(400).json({ code: 400, message: '请选择文件' });
 
-    // 从路由中间件设置的 uploadType 获取文件类型
     const fileType = req.uploadType || '合同资质';
-
     const filePath = fileType === '合同资质' ? '/uploads/orders/documents/' : '/uploads/orders/shipments/';
 
-    // 修复 Windows 环境下中文文件名编码问题
     const safeName = Buffer.from(req.file.originalname, 'latin1').toString('utf8');
     await pool.execute(
       `INSERT INTO order_files (order_id, file_type, file_name, file_path, file_size, mime_type, description, uploaded_by)

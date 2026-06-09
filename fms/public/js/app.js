@@ -511,9 +511,15 @@ async function loadOrdList(container, page = 1, search = '', status = '', paySta
           <td>${o.item_count} 项</td>
           <td>${o.sales_date ? new Date(o.sales_date).toLocaleDateString('zh-CN') : '-'}</td>
           <td>
-            <button class="btn btn-sm btn-outline" onclick="viewOrder(${o.id})">查看</button>
-            <button class="btn btn-sm btn-outline" onclick="editOrder(${o.id})" style="margin-left:4px">编辑</button>
-            ${o.status==='待处理' ? `<button class="btn btn-sm btn-outline" style="color:var(--color-danger);margin-left:4px" onclick="deleteOrderConfirm(${o.id},'${escHtml(o.order_number)}')">删除</button>` : ''}
+            ${o.status==='待处理'
+              ? `<button class="btn btn-sm btn-primary" onclick="viewOrder(${o.id})">审核</button>`
+              : `<button class="btn btn-sm btn-outline" onclick="viewOrder(${o.id})">查看</button>`}
+            ${(o.status!=='已完成' && o.status!=='已取消')
+              ? `<button class="btn btn-sm btn-outline" onclick="editOrder(${o.id})" style="margin-left:4px">编辑</button>`
+              : ''}
+            ${o.status==='待处理'
+              ? `<button class="btn btn-sm btn-outline" style="color:var(--color-danger);margin-left:4px" onclick="deleteOrderConfirm(${o.id},'${escHtml(o.order_number)}')">删除</button>`
+              : ''}
           </td>
         </tr>`).join('');
     }
@@ -955,16 +961,33 @@ function updateOfTotal() {
 async function execCreateOrder() {
   try {
     const items = [];
-    document.querySelectorAll('.item-row').forEach(el => {
+    const rows = document.querySelectorAll('.item-row');
+    for (let idx = 0; idx < rows.length; idx++) {
+      const el = rows[idx];
       const prodId = parseInt(el.querySelector('.of-prod').value);
       const invSel = el.querySelector('.of-inv');
-      const invId = invSel.disabled ? null : parseInt(invSel.value);
       const qty = parseFloat(el.querySelector('.of-qty').value);
       const price = parseFloat(el.querySelector('.of-price').value);
-      if (prodId && invId && qty >= 0.1) {
-        items.push({ product_id: prodId, inventory_id: invId, quantity: qty, unit_price: price });
+      
+      if (!prodId) {
+        Toast.warning(`第 ${idx + 1} 条产品明细：请选择产品`);
+        return;
       }
-    });
+      if (invSel.disabled || !invSel.value) {
+        Toast.warning(`第 ${idx + 1} 条产品明细：请选择批号`);
+        return;
+      }
+      const invId = parseInt(invSel.value);
+      if (!qty || qty < 0.1) {
+        Toast.warning(`第 ${idx + 1} 条产品明细：数量（≥0.1）为必填项`);
+        return;
+      }
+      if (price < 0) {
+        Toast.warning(`第 ${idx + 1} 条产品明细：单价不能为负数`);
+        return;
+      }
+      items.push({ product_id: prodId, inventory_id: invId, quantity: qty, unit_price: price });
+    }
 
     if (items.length === 0) { Toast.warning('请至少添加一条产品明细'); return; }
 
@@ -1140,30 +1163,51 @@ async function editOrder(id) {
   const o = ordRes.data;
   const customers = custRes.data.list || [];
   const products = prodRes.data.list || [];
+  window._efProds = products;
   
   const custOpts = '<option value="">请选择</option>' + customers.map(c => `<option value="${c.id}" ${c.id===o.customer_id?'selected':''}>${escHtml(c.name)}${c.company?' ('+escHtml(c.company)+')':''}</option>`).join('');
-  const prodOpts = '<option value="">选产品</option>' + products.map(p => `<option value="${p.id}">${escHtml(p.model)}</option>`).join('');
+
+  // 为每个产品预加载其批号列表
+  const batchMap = {};
+  const invIds = (o.items || []).map(i => i.inventory_id).filter(x => x);
+  try {
+    for (const item of (o.items || [])) {
+      if (item.product_id && !batchMap[item.product_id]) {
+        const bRes = await API.get('/inventory/batch-numbers/' + item.product_id);
+        batchMap[item.product_id] = bRes.data || [];
+      }
+    }
+  } catch (_) {}
 
   // 构建产品明细行
   const items = o.items || [];
-  let itemRows = items.map((item, idx) => `
+  let itemRows = items.map((item, idx) => {
+    const prodOpts = '<option value="">选产品</option>' + products.map(p => `<option value="${p.id}" ${p.id===item.product_id?'selected':''}>${escHtml(p.model)}</option>`).join('');
+    const batches = batchMap[item.product_id] || [];
+    const currentInvId = item.inventory_id || '';
+    const batchOpts = '<option value="">选批次</option>' + batches.map(b => `<option value="${b.id}" ${b.id===currentInvId?'selected':''} data-qty="${b.quantity}">${escHtml(b.batch_number)}</option>`).join('');
+    const totalStock = batches.reduce((s, b) => s + parseFloat(b.quantity || 0), 0);
+    const initialStock = currentInvId ? (batches.find(b => b.id === currentInvId)?.quantity || totalStock) : totalStock;
+    return `
     <tr class="item-row">
       <td>
         <select class="so-item-select ef-prod" data-index="${idx}" onchange="onEfProdChange(this, ${idx})">
-          ${prodOpts.replace(`value="${item.product_id}"`, `value="${item.product_id}" selected`)}
+          ${prodOpts}
         </select>
       </td>
       <td>
-        <input type="text" class="so-item-input ef-batch" value="${escHtml(item.batch_number||'')}" placeholder="批号">
+        <select class="so-item-select ef-batch" data-index="${idx}">${batchOpts}</select>
       </td>
-      <td><span id="efStock_${idx}" class="stock-warning">${item.stock_quantity||0}</span></td>
+      <td><span id="efStock_${idx}" class="stock-warning">${parseFloat(initialStock).toFixed(1)}</span></td>
       <td><input type="number" class="so-item-input ef-price" step="0.01" value="${item.unit_price||0}" oninput="updateEfTotal()" placeholder="0.00"></td>
       <td><input type="number" class="so-item-input ef-qty" step="0.1" min="0.1" value="${item.quantity||1}" oninput="updateEfTotal()" style="text-align:center"></td>
       <td style="font-weight:600;color:#1E293B" class="ef-subtotal">¥${(parseFloat(item.subtotal)||0).toFixed(2)}</td>
       <td><button type="button" class="so-delete-btn" onclick="removeEfItem(this)">×</button></td>
-    </tr>`).join('');
+    </tr>`;
+  }).join('');
 
   if (!itemRows) {
+    const prodOpts = '<option value="">选产品</option>' + products.map(p => `<option value="${p.id}">${escHtml(p.model)}</option>`).join('');
     itemRows = `<tr class="item-row">
       <td>
         <select class="so-item-select ef-prod" data-index="0" onchange="onEfProdChange(this, 0)">
@@ -1171,7 +1215,7 @@ async function editOrder(id) {
         </select>
       </td>
       <td>
-        <input type="text" class="so-item-input ef-batch" placeholder="批号">
+        <select class="so-item-select ef-batch" data-index="0"><option value="">先选产品</option></select>
       </td>
       <td><span id="efStock_0" class="stock-warning">0</span></td>
       <td><input type="number" class="so-item-input ef-price" step="0.01" value="0" oninput="updateEfTotal()" placeholder="0.00"></td>
@@ -1444,6 +1488,30 @@ async function editOrder(id) {
   window._efCurrentOrderId = o.id;
   window._efPendingDocFiles = [];
   window._efPendingShipFiles = [];
+
+  // 给已有行的批号 select 加上 onchange 事件，用于更新库存显示
+  document.querySelectorAll('.ef-batch').forEach(batchSel => {
+    const idx = batchSel.getAttribute('data-index');
+    const stockEl = document.getElementById('efStock_' + idx);
+    batchSel.onchange = () => {
+      const opt = batchSel.options[batchSel.selectedIndex];
+      const qty = opt ? opt.getAttribute('data-qty') : '';
+      if (qty === '' || qty === null) {
+        if (stockEl) {
+          // 未选中具体批号，显示该产品总库存
+          let total = 0;
+          for (let i = 0; i < batchSel.options.length; i++) {
+            const q = parseFloat(batchSel.options[i].getAttribute('data-qty') || '0');
+            if (!isNaN(q)) total += q;
+          }
+          stockEl.textContent = total.toFixed(1);
+        }
+      } else {
+        if (stockEl) stockEl.textContent = qty;
+      }
+    };
+  });
+
   renderEfDocList();
   renderEfShipList();
 }
@@ -1451,21 +1519,37 @@ async function editOrder(id) {
 // 编辑订单产品变更处理
 async function onEfProdChange(select, index) {
   const prodId = parseInt(select.value);
+  const row = select.closest('.item-row');
+  const batchSel = row.querySelector('.ef-batch');
+  const stockEl = document.getElementById('efStock_' + index);
+
   if (!prodId) {
-    document.getElementById('efStock_' + index).textContent = '0';
+    if (batchSel) batchSel.innerHTML = '<option value="">先选产品</option>';
+    if (stockEl) stockEl.textContent = '0';
     return;
   }
-  
-  const prod = window._efProds.find(p => p.id === prodId);
-  if (prod) {
-    try {
-      const res = await API.get('/inventory/batch-numbers/' + prodId);
-      const batches = res.data || [];
-      const totalStock = batches.reduce((sum, b) => sum + parseFloat(b.quantity || 0), 0);
-      document.getElementById('efStock_' + index).textContent = totalStock.toFixed(1);
-    } catch (_) {
-      document.getElementById('efStock_' + index).textContent = '0';
+
+  try {
+    const res = await API.get('/inventory/batch-numbers/' + prodId);
+    const batches = res.data || [];
+    if (batchSel) {
+      batchSel.innerHTML = '<option value="">选批次</option>' + batches.map(b => `<option value="${b.id}" data-qty="${b.quantity}">${escHtml(b.batch_number)}</option>`).join('');
+      batchSel.onchange = () => {
+        const opt = batchSel.options[batchSel.selectedIndex];
+        const qty = opt ? opt.getAttribute('data-qty') : '';
+        if (qty === '' || qty === null) {
+          const totalStock = batches.reduce((sum, b) => sum + parseFloat(b.quantity || 0), 0);
+          if (stockEl) stockEl.textContent = totalStock.toFixed(1);
+        } else {
+          if (stockEl) stockEl.textContent = qty;
+        }
+      };
     }
+    const totalStock = batches.reduce((sum, b) => sum + parseFloat(b.quantity || 0), 0);
+    if (stockEl) stockEl.textContent = totalStock.toFixed(1);
+  } catch (_) {
+    if (stockEl) stockEl.textContent = '0';
+    if (batchSel) batchSel.innerHTML = '<option value="">加载失败</option>';
   }
 }
 
@@ -1483,7 +1567,7 @@ function addEfItem() {
   newRow.className = 'item-row';
   newRow.innerHTML = `
     <td><select class="so-item-select ef-prod" data-index="${newIndex}" onchange="onEfProdChange(this, ${newIndex})">${prodOpts}</select></td>
-    <td><input type="text" class="so-item-input ef-batch" placeholder="批号"></td>
+    <td><select class="so-item-select ef-batch" data-index="${newIndex}"><option value="">先选产品</option></select></td>
     <td><span id="efStock_${newIndex}" class="stock-warning">0</span></td>
     <td><input type="number" class="so-item-input ef-price" step="0.01" value="0" oninput="updateEfTotal()" placeholder="0.00"></td>
     <td><input type="number" class="so-item-input ef-qty" step="0.1" min="0.1" value="1" oninput="updateEfTotal()" style="text-align:center"></td>
@@ -1630,21 +1714,40 @@ async function execEditOrder(id) {
   try {
     // 收集产品明细
     const items = [];
-    document.querySelectorAll('.item-row').forEach((row, idx) => {
+    const rows = document.querySelectorAll('.item-row');
+    for (let idx = 0; idx < rows.length; idx++) {
+      const row = rows[idx];
       const prodEl = row.querySelector('.ef-prod');
       const batchEl = row.querySelector('.ef-batch');
       const priceEl = row.querySelector('.ef-price');
       const qtyEl = row.querySelector('.ef-qty');
       
-      if (prodEl.value) {
-        items.push({
-          product_id: parseInt(prodEl.value),
-          batch_number: batchEl.value.trim(),
-          unit_price: parseFloat(priceEl.value) || 0,
-          quantity: parseFloat(qtyEl.value) || 0,
-        });
+      if (!prodEl.value) {
+        Toast.warning(`第 ${idx + 1} 条产品明细：请选择产品`);
+        return;
       }
-    });
+      if (!batchEl.value) {
+        Toast.warning(`第 ${idx + 1} 条产品明细：请选择批号`);
+        return;
+      }
+      const qty = parseFloat(qtyEl.value);
+      if (!qty || qty < 0.1) {
+        Toast.warning(`第 ${idx + 1} 条产品明细：数量（≥0.1）为必填项`);
+        return;
+      }
+      const price = parseFloat(priceEl.value);
+      if (price < 0) {
+        Toast.warning(`第 ${idx + 1} 条产品明细：单价不能为负数`);
+        return;
+      }
+      
+      items.push({
+        product_id: parseInt(prodEl.value),
+        inventory_id: parseInt(batchEl.value),
+        unit_price: price || 0,
+        quantity: qty,
+      });
+    }
 
     const trayEl = document.querySelector('input[name="efTray"]:checked');
     const invoiceEl = document.querySelector('input[name="efInvoice"]:checked');
@@ -2884,6 +2987,12 @@ function showApp() {
 // 事件
 // ============================================================
 document.getElementById('loginForm').addEventListener('submit', handleLogin);
+document.getElementById('loginUsername').addEventListener('input', (e) => {
+  e.target.closest('.input-wrapper').classList.toggle('has-content', e.target.value.length > 0);
+});
+document.getElementById('loginPassword').addEventListener('input', (e) => {
+  e.target.closest('.input-wrapper').classList.toggle('has-content', e.target.value.length > 0);
+});
 document.getElementById('logoutBtn').addEventListener('click', () => Auth.logout());
 document.getElementById('sidebarToggle').addEventListener('click', () => {
   document.getElementById('sidebar').classList.toggle('collapsed');
