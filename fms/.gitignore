@@ -8,3 +8,5 @@ logs/
 Thumbs.db
 dist/
 .cache/
+.trae/
+送货单/

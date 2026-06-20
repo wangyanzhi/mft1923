@@ -507,7 +507,7 @@ async function loadOrdList(container, page = 1, search = '', status = '', paySta
           <td>¥${Number(o.total_amount).toFixed(2)}</td>
           <td><span class="badge ${statusBadge(o.status)}">${o.status}</span></td>
           <td><span class="badge ${payBadge(o.payment_status)}">${o.payment_status}</span></td>
-          <td>${escHtml(o.agent_name||'-')}</td>
+          <td>${escHtml(o.operator_name||'-')}</td>
           <td>${o.item_count} 项</td>
           <td>${o.sales_date ? new Date(o.sales_date).toLocaleDateString('zh-CN') : '-'}</td>
           <td>
@@ -520,6 +520,7 @@ async function loadOrdList(container, page = 1, search = '', status = '', paySta
             ${o.status==='待处理'
               ? `<button class="btn btn-sm btn-outline" style="color:var(--color-danger);margin-left:4px" onclick="deleteOrderConfirm(${o.id},'${escHtml(o.order_number)}')">删除</button>`
               : ''}
+            <button class="btn btn-sm btn-outline" style="margin-left:4px;background:#F59E0B;color:#fff;border-color:#F59E0B" onclick="showDeliveryNote(${o.id})">送货单</button>
           </td>
         </tr>`).join('');
     }
@@ -1144,6 +1145,508 @@ async function viewOrder(id) {
     <button class="btn btn-sm btn-outline" onclick="uploadOrderFile(${o.id})">上传文件</button>
     <button class="btn btn-outline" onclick="Modal.close()">关闭</button>
   `);
+}
+
+// --- 送货单弹窗 ---
+async function showDeliveryNote(id) {
+  const res = await API.get('/orders/' + id);
+  const o = res.data;
+  const today = new Date().toLocaleDateString('zh-CN');
+  
+  const itemsHtml = o.items.map((item, index) => `
+    <tr>
+      <td style="text-align:center;border-bottom:1px solid #E2E8F0;padding:8px 4px">${index + 1}</td>
+      <td style="border-bottom:1px solid #E2E8F0;padding:8px 8px">${escHtml(item.product_model)}</td>
+      <td style="text-align:center;border-bottom:1px solid #E2E8F0;padding:8px 4px">品牌</td>
+      <td style="text-align:center;border-bottom:1px solid #E2E8F0;padding:8px 4px">${escHtml(item.batch_number||'-')}</td>
+      <td style="text-align:center;border-bottom:1px solid #E2E8F0;padding:8px 4px">${item.quantity}</td>
+    </tr>
+  `).join('');
+
+  document.getElementById('modalBox').style.width = '720px';
+  document.getElementById('modalBox').style.maxHeight = '90vh';
+  document.getElementById('modalBox').style.overflowY = 'auto';
+
+  Modal.open('', `
+    <style>
+      .dn-container { 
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+        padding: 24px;
+        background: #fff;
+      }
+      .dn-title {
+        text-align: center;
+        font-size: 24px;
+        font-weight: 700;
+        color: #1E293B;
+        margin-bottom: 20px;
+        padding-bottom: 12px;
+        border-bottom: 2px solid #3B82F6;
+      }
+      .dn-header {
+        display: flex;
+        justify-content: space-between;
+        margin-bottom: 16px;
+        padding: 12px 16px;
+        background: #F8FAFC;
+        border-radius: 8px;
+      }
+      .dn-header-item {
+        font-size: 14px;
+      }
+      .dn-header-label {
+        color: #64748B;
+        margin-right: 8px;
+      }
+      .dn-header-value {
+        font-weight: 600;
+        color: #DC2626;
+      }
+      .dn-table-wrapper {
+        margin: 16px 0;
+        border: 1px solid #E2E8F0;
+        border-radius: 8px;
+        overflow: hidden;
+      }
+      .dn-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 13px;
+      }
+      .dn-table th {
+        background: #F1F5F9;
+        padding: 10px 8px;
+        text-align: center;
+        font-weight: 600;
+        color: #475569;
+        border-bottom: 2px solid #E2E8F0;
+      }
+      .dn-table td {
+        padding: 10px 8px;
+      }
+      .dn-remarks {
+        margin: 16px 0;
+        border: 1px solid #E2E8F0;
+        border-radius: 8px;
+        overflow: hidden;
+      }
+      .dn-remarks-title {
+        background: #F1F5F9;
+        padding: 8px 12px;
+        font-size: 13px;
+        font-weight: 600;
+        color: #475569;
+        border-bottom: 1px solid #E2E8F0;
+      }
+      .dn-remarks-textarea {
+        width: 100%;
+        min-height: 80px;
+        padding: 12px;
+        border: none;
+        resize: none;
+        font-size: 13px;
+        font-family: inherit;
+        box-sizing: border-box;
+      }
+      .dn-remarks-textarea:focus {
+        outline: none;
+      }
+      .dn-certification {
+        margin: 16px 0;
+        padding: 16px;
+        background: #F8FAFC;
+        border-radius: 8px;
+      }
+      .dn-certification-title {
+        font-size: 13px;
+        font-weight: 600;
+        color: #1E293B;
+        margin-bottom: 12px;
+      }
+      .dn-certification-row {
+        display: flex;
+        justify-content: space-between;
+        margin-bottom: 12px;
+        font-size: 13px;
+      }
+      .dn-certification-left, .dn-certification-right {
+        flex: 1;
+      }
+      .dn-certification-right {
+        text-align: right;
+      }
+      .dn-certification-label {
+        color: #64748B;
+        margin-right: 8px;
+      }
+      .dn-certification-value {
+        font-weight: 500;
+        color: #1E293B;
+      }
+      .dn-certification-input {
+        border: 1px solid #E2E8F0;
+        border-radius: 4px;
+        padding: 4px 8px;
+        font-size: 13px;
+        font-family: inherit;
+        width: 180px;
+      }
+      .dn-certification-input:focus {
+        outline: none;
+        border-color: #3B82F6;
+      }
+      .dn-footer-text {
+        margin: 16px 0;
+        padding: 12px 16px;
+        background: #FEF3C7;
+        border-radius: 8px;
+        font-size: 13px;
+        color: #92400E;
+        text-align: center;
+      }
+      .dn-btn-container {
+        display: flex;
+        justify-content: center;
+        gap: 16px;
+        margin-top: 24px;
+        padding-top: 16px;
+        border-top: 1px solid #E2E8F0;
+      }
+      .dn-btn {
+        padding: 10px 32px;
+        font-size: 14px;
+        font-weight: 600;
+        border: none;
+        border-radius: 8px;
+        cursor: pointer;
+        transition: all 0.2s;
+      }
+      .dn-btn-print {
+        background: #DC2626;
+        color: #fff;
+      }
+      .dn-btn-print:hover {
+        background: #B91C1C;
+      }
+      .dn-btn-export {
+        background: #3B82F6;
+        color: #fff;
+      }
+      .dn-btn-export:hover {
+        background: #2563EB;
+      }
+      .dn-btn-close {
+        background: #94A3B8;
+        color: #fff;
+      }
+      .dn-btn-close:hover {
+        background: #64748B;
+      }
+      @media print {
+        .dn-btn-container {
+          display: none;
+        }
+        body * {
+          visibility: hidden;
+        }
+        .dn-container, .dn-container * {
+          visibility: visible;
+        }
+        .dn-container {
+          position: absolute;
+          left: 0;
+          top: 0;
+          width: 100%;
+          box-shadow: none;
+        }
+      }
+    </style>
+    <div class="dn-container" id="deliveryNoteContent">
+      <div class="dn-title">送货单</div>
+      
+      <div class="dn-header">
+        <div class="dn-header-item">
+          <span class="dn-header-label">收货单位：</span>
+          <span class="dn-header-value">${escHtml(o.customer_name)}</span>
+        </div>
+        <div class="dn-header-item">
+          <span class="dn-header-label">订单日期：</span>
+          <span class="dn-header-value">${(o.sales_date||'').slice(0,10)||today}</span>
+        </div>
+      </div>
+
+      <div class="dn-table-wrapper">
+        <table class="dn-table">
+          <thead>
+            <tr>
+              <th style="width:8%">序号</th>
+              <th style="width:42%">型号</th>
+              <th style="width:15%">品牌</th>
+              <th style="width:18%">批号</th>
+              <th style="width:17%">数量</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${itemsHtml}
+          </tbody>
+        </table>
+      </div>
+
+      <div class="dn-remarks">
+        <div class="dn-remarks-title">备注：</div>
+        <textarea class="dn-remarks-textarea" id="dnRemarks" placeholder="请输入内容"></textarea>
+      </div>
+
+      <div class="dn-footer-text">
+        以上材料外包装完整，且材料数量无误、外观无损坏。
+      </div>
+
+      <div class="dn-certification">
+        <div class="dn-certification-title">双方签字盖章</div>
+        <div class="dn-certification-row">
+          <div class="dn-certification-left">
+            <span class="dn-certification-label">发货单位及经手人（盖章）：</span>
+            <span class="dn-certification-value">管理员</span>
+          </div>
+          <div class="dn-certification-right">
+            <span class="dn-certification-label">收货单位及经手人（盖章）：</span>
+            <span class="dn-certification-value">${escHtml(o.customer_name)}</span>
+          </div>
+        </div>
+        <div class="dn-certification-row">
+          <div class="dn-certification-left">
+            <span class="dn-certification-label">发货日期：</span>
+            <span class="dn-certification-value">${today}</span>
+          </div>
+          <div class="dn-certification-right">
+            <span class="dn-certification-label">收货日期：</span>
+            <input type="date" class="dn-certification-input" id="dnReceiveDate">
+          </div>
+        </div>
+      </div>
+
+      <div class="dn-btn-container">
+        <button class="dn-btn dn-btn-print" onclick="printDeliveryNote()">打印送货单</button>
+        <button class="dn-btn dn-btn-export" onclick="exportDeliveryExcel(${o.id})">导出详单</button>
+        <button class="dn-btn dn-btn-close" onclick="Modal.close()">关闭窗口</button>
+      </div>
+    </div>
+  `, '');
+}
+
+// --- 打印送货单（生成PDF下载）---
+async function printDeliveryNote() {
+  const content = document.getElementById('deliveryNoteContent');
+  
+  const pdfContent = content.cloneNode(true);
+  const btnContainer = pdfContent.querySelector('.dn-btn-container');
+  if (btnContainer) {
+    btnContainer.remove();
+  }
+
+  const tempContainer = document.createElement('div');
+  tempContainer.style.cssText = `
+    position: fixed;
+    left: -10000px;
+    top: -10000px;
+    width: 595px;
+    padding: 24px;
+    background: #fff;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  `;
+  tempContainer.innerHTML = `
+    <style>
+      .dn-title {
+        text-align: center;
+        font-size: 22px;
+        font-weight: 700;
+        color: #1E293B;
+        margin-bottom: 18px;
+        padding-bottom: 10px;
+        border-bottom: 2px solid #3B82F6;
+      }
+      .dn-header {
+        display: flex;
+        justify-content: space-between;
+        margin-bottom: 14px;
+        padding: 10px 14px;
+        background: #F8FAFC;
+        border-radius: 6px;
+      }
+      .dn-header-item {
+        font-size: 13px;
+      }
+      .dn-header-label {
+        color: #64748B;
+        margin-right: 6px;
+      }
+      .dn-header-value {
+        font-weight: 600;
+        color: #DC2626;
+      }
+      .dn-table-wrapper {
+        margin: 14px 0;
+        border: 1px solid #E2E8F0;
+        border-radius: 6px;
+        overflow: hidden;
+      }
+      .dn-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 12px;
+      }
+      .dn-table th {
+        background: #F1F5F9;
+        padding: 8px 6px;
+        text-align: center;
+        font-weight: 600;
+        color: #475569;
+        border-bottom: 2px solid #E2E8F0;
+      }
+      .dn-table td {
+        padding: 8px 6px;
+        border-bottom: 1px solid #E2E8F0;
+        text-align: center;
+      }
+      .dn-table td:first-child + td {
+        text-align: left;
+      }
+      .dn-remarks {
+        margin: 14px 0;
+        border: 1px solid #E2E8F0;
+        border-radius: 6px;
+        min-height: 60px;
+        padding: 10px;
+      }
+      .dn-remarks-title {
+        font-weight: 600;
+        color: #475569;
+        margin-bottom: 6px;
+      }
+      .dn-footer-text {
+        margin: 14px 0;
+        padding: 10px 14px;
+        background: #FEF3C7;
+        border-radius: 6px;
+        font-size: 12px;
+        color: #92400E;
+        text-align: center;
+      }
+      .dn-certification {
+        margin: 14px 0;
+        padding: 14px;
+        background: #F8FAFC;
+        border-radius: 6px;
+      }
+      .dn-certification-title {
+        font-size: 12px;
+        font-weight: 600;
+        color: #1E293B;
+        margin-bottom: 10px;
+      }
+      .dn-certification-row {
+        display: flex;
+        justify-content: space-between;
+        margin-bottom: 10px;
+        font-size: 12px;
+      }
+      .dn-certification-left, .dn-certification-right {
+        flex: 1;
+      }
+      .dn-certification-right {
+        text-align: right;
+      }
+      .dn-certification-label {
+        color: #64748B;
+        margin-right: 6px;
+      }
+      .dn-certification-value {
+        font-weight: 500;
+        color: #1E293B;
+      }
+      .dn-certification-input {
+        border: 1px solid #E2E8F0;
+        border-radius: 4px;
+        padding: 4px 8px;
+        font-size: 12px;
+        font-family: inherit;
+        width: 150px;
+      }
+    </style>
+  `;
+  tempContainer.appendChild(pdfContent);
+  document.body.appendChild(tempContainer);
+
+  try {
+    const canvas = await html2canvas(tempContainer, {
+      scale: 2,
+      useCORS: true,
+      logging: false,
+      backgroundColor: '#FFFFFF'
+    });
+
+    const imgData = canvas.toDataURL('image/png');
+    const { jsPDF } = window.jspdf;
+    const pdf = new jsPDF('p', 'mm', 'a4');
+    
+    const pdfWidth = pdf.internal.pageSize.getWidth();
+    const pdfHeight = pdf.internal.pageSize.getHeight();
+    const imgWidth = canvas.width;
+    const imgHeight = canvas.height;
+    const ratio = Math.min(pdfWidth / imgWidth, pdfHeight / imgHeight);
+    const imgX = (pdfWidth - imgWidth * ratio) / 2;
+    const imgY = 10;
+
+    pdf.addImage(imgData, 'PNG', imgX, imgY, imgWidth * ratio, imgHeight * ratio);
+
+    const orderNumber = content.querySelector('.dn-header-value')?.textContent || '送货单';
+    const today = new Date().toLocaleDateString('zh-CN').replace(/\//g, '-');
+    pdf.save(`送货单_${orderNumber}_${today}.pdf`);
+  } catch (error) {
+    console.error('生成PDF失败:', error);
+    alert('生成PDF失败，请重试');
+  } finally {
+    document.body.removeChild(tempContainer);
+  }
+}
+
+// --- 导出送货单Excel ---
+function exportDeliveryExcel(orderId) {
+  API.get('/orders/' + orderId).then(res => {
+    const o = res.data;
+    const today = new Date().toLocaleDateString('zh-CN');
+    
+    let csvContent = '\uFEFF';
+    csvContent += '送货单\n\n';
+    csvContent += `收货单位,${o.customer_name}\n`;
+    csvContent += `订单日期,${(o.sales_date||'').slice(0,10)||today}\n`;
+    csvContent += '\n';
+    csvContent += '序号,型号,品牌,批号,数量\n';
+    
+    o.items.forEach((item, index) => {
+      csvContent += `${index + 1},${escHtml(item.product_model)},品牌,${escHtml(item.batch_number||'-')},${item.quantity}\n`;
+    });
+    
+    csvContent += '\n';
+    csvContent += `备注,${document.getElementById('dnRemarks')?.value || ''}\n`;
+    csvContent += '\n';
+    csvContent += '发货单位及经手人,管理员\n';
+    csvContent += `发货日期,${today}\n`;
+    csvContent += `收货单位及经手人,${o.customer_name}\n`;
+    csvContent += `收货日期,${document.getElementById('dnReceiveDate')?.value || ''}\n`;
+    
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    link.setAttribute('href', url);
+    link.setAttribute('download', `送货单_${o.order_number}_${today}.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  }).catch(err => {
+    Toast.error('导出失败：' + err.message);
+  });
 }
 
 // 删除订单文件
